@@ -226,3 +226,73 @@ commit; its exact result is included in the task handoff.
   a future structural consideration, not a blocker for the scoped behavior.
 - No credentials, tokens, cookies, browser account identities, new
   dependencies, debug output, or unrelated changes were added.
+
+## Review fix Round 1/5
+
+Review source:
+`.superpowers/sdd/2026-07-29-creatordock-v1/task-3-review.md`.
+
+Scope was limited to the two Important findings. The Minor export-content
+finding was intentionally left unchanged for Task 5/final review, as directed.
+
+### Confirmation focus containment and destructive focus recovery
+
+RED command:
+
+```text
+npm test -- src/main.test.tsx -t "adds, edits, and confirms|focuses the next surviving|moves relative to adjacent visible|downloads full"
+4 failed | 8 skipped
+```
+
+Observed intended failures:
+
+- Shift+Tab from confirmation Cancel did not wrap to the destructive action.
+- Confirmed deletion left focus on `body` instead of `Edit C account`.
+- Confirmed reset left focus on `body` instead of `Reset workbench`.
+
+GREEN implementation:
+
+- Added one shared `containDialogFocus` keyboard handler used by both
+  `EntryDialog` and `ConfirmDialog`.
+- Confirm dialogs now contain Tab/Shift+Tab focus and retain Escape
+  cancellation.
+- Deletion calculates the next visible entry, then the previous visible entry,
+  and focuses its Edit action before committing deletion. If no visible entry
+  survives, it focuses the currently visible responsive Add destination
+  control.
+- Reset returns focus to its persistent Reset workbench trigger before the
+  confirmation unmounts.
+
+### Filter-aware keyboard reordering
+
+The RED fixture used interleaved global order:
+`hidden-before, A-work, C-work, hidden-after`.
+
+Observed intended failures:
+
+- `Move A work earlier` was enabled even though A was first in the filtered
+  Work view.
+- `Move C work later` was enabled even though C was last in the filtered view.
+- One absolute-index move could leave visible order unchanged.
+
+GREEN implementation:
+
+- Earlier/later disabled states now use the visible sequence boundaries.
+- A keyboard move resolves the previous/next visible entry, converts that
+  target to its absolute configuration index, and passes the final operation
+  to the existing `reorderLaunchEntry` domain function.
+- Pointer drop continues through the same `moveEntry` wrapper and
+  `reorderLaunchEntry` domain operation.
+
+Focused GREEN:
+
+```text
+npm test -- src/main.test.tsx -t "adds, edits, and confirms|focuses the next surviving|moves relative to adjacent visible|downloads full"
+4 passed | 8 skipped
+
+npm test -- src/main.test.tsx
+12 passed
+```
+
+Final full-suite/build/diff verification and the Round 1 commit hash are
+reported in the task handoff after the final gate.

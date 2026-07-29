@@ -91,7 +91,7 @@ describe('catalog navigation and discovery', () => {
 })
 
 describe('destination lifecycle', () => {
-  it('adds, edits, and confirms deletion without confusing shortcut settings with web links', () => {
+  it('adds, edits, and confirms deletion without confusing shortcut settings with web links', async () => {
     seed(config([]))
     render(<App />)
 
@@ -120,7 +120,13 @@ describe('destination lifecycle', () => {
     const deleteButton = screen.getByRole('button', { name: 'Delete Client B' })
     fireEvent.click(deleteButton)
     const confirmation = screen.getByRole('alertdialog', { name: 'Delete destination?' })
-    expect(within(confirmation).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    const cancelDelete = within(confirmation).getByRole('button', { name: 'Cancel' })
+    const confirmDelete = within(confirmation).getByRole('button', { name: 'Delete destination' })
+    expect(cancelDelete).toHaveFocus()
+    fireEvent.keyDown(confirmation, { key: 'Tab', shiftKey: true })
+    expect(confirmDelete).toHaveFocus()
+    fireEvent.keyDown(confirmation, { key: 'Tab' })
+    expect(cancelDelete).toHaveFocus()
     fireEvent.keyDown(confirmation, { key: 'Escape' })
     expect(deleteButton).toHaveFocus()
     expect(screen.getByRole('link', { name: /Client B/ })).toBeInTheDocument()
@@ -129,6 +135,9 @@ describe('destination lifecycle', () => {
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete destination' }))
     expect(screen.queryByRole('link', { name: /Client B/ })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Your workbench is empty' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Add destination' })).toContain(document.activeElement)
+    })
   })
 
   it('reports domain validation errors and restores focus when the dialog closes', () => {
@@ -156,6 +165,20 @@ describe('destination lifecycle', () => {
     fireEvent.keyDown(dialog, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(addButton).toHaveFocus()
+  })
+
+  it('focuses the next surviving entry action after confirmed deletion', async () => {
+    seed(config([
+      entry({ id: 'a', displayName: 'A account' }),
+      entry({ id: 'b', displayName: 'B account', destinationUrl: 'https://example.com/b' }),
+      entry({ id: 'c', displayName: 'C account', destinationUrl: 'https://example.com/c' }),
+    ]))
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete B account' }))
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete destination' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit C account' })).toHaveFocus())
   })
 })
 
@@ -192,6 +215,29 @@ describe('reordering', () => {
       expect.stringContaining('B account'),
       expect.stringContaining('A account'),
     ])
+  })
+
+  it('moves relative to adjacent visible cards and disables controls at filtered boundaries', () => {
+    seed(config([
+      entry({ id: 'hidden-before', displayName: 'Hidden before', group: 'Other' }),
+      entry({ id: 'a', displayName: 'A work', group: 'Work', destinationUrl: 'https://example.com/a' }),
+      entry({ id: 'c', displayName: 'C work', group: 'Work', destinationUrl: 'https://example.com/c' }),
+      entry({ id: 'hidden-after', displayName: 'Hidden after', group: 'Other', destinationUrl: 'https://example.com/after' }),
+    ]))
+    render(<App />)
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Categories' })).getByRole('button', { name: 'Work' }))
+    expect(screen.getByRole('button', { name: 'Move A work earlier' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move C work later' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move C work earlier' }))
+
+    expect(screen.getAllByRole('link', { name: /work/ }).map((link) => link.textContent)).toEqual([
+      expect.stringContaining('C work'),
+      expect.stringContaining('A work'),
+    ])
+    expect(screen.getByRole('button', { name: 'Move C work earlier' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move A work later' })).toBeDisabled()
   })
 })
 
@@ -253,9 +299,11 @@ describe('preferences, backup, and recovery', () => {
     fireEvent.click(within(reset).getByRole('button', { name: 'Cancel' }))
     expect(screen.getByRole('link', { name: /Studio account/ })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset workbench' }))
+    const resetButton = screen.getByRole('button', { name: 'Reset workbench' })
+    fireEvent.click(resetButton)
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Reset to defaults' }))
     expect(screen.getByRole('link', { name: /Xiaohongshu/ })).toBeInTheDocument()
+    expect(resetButton).toHaveFocus()
   })
 
   it('announces corrupt-storage recovery and distinguishes no search results', async () => {

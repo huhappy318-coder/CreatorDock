@@ -1,4 +1,12 @@
-import { StrictMode, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  StrictMode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import { createRoot } from 'react-dom/client'
 import { platformPresets } from './catalog'
 import {
@@ -38,6 +46,9 @@ export function App() {
       : null,
   )
   const returnFocus = useRef<HTMLButtonElement | null>(null)
+  const mobileAddButton = useRef<HTMLButtonElement>(null)
+  const workbenchAddButton = useRef<HTMLButtonElement>(null)
+  const entryActionButtons = useRef(new Map<string, HTMLButtonElement>())
 
   const groups = useMemo(
     () => [...new Set(config.entries.map((item) => item.group))].sort((a, b) => a.localeCompare(b)),
@@ -74,6 +85,27 @@ export function App() {
     commitConfig(reorderLaunchEntry(config, id, destinationIndex))
   }
 
+  const moveVisibleEntry = (id: string, direction: -1 | 1) => {
+    const visibleIndex = visibleEntries.findIndex((entry) => entry.id === id)
+    const target = visibleEntries[visibleIndex + direction]
+    if (!target) return
+    moveEntry(id, config.entries.findIndex((entry) => entry.id === target.id))
+  }
+
+  const focusAddDestination = () => {
+    const candidates = [workbenchAddButton.current, mobileAddButton.current].filter(
+      (button): button is HTMLButtonElement => button !== null,
+    )
+    const visibleButton = candidates.find((button) => {
+      for (let element: HTMLElement | null = button; element; element = element.parentElement) {
+        const style = getComputedStyle(element)
+        if (style.display === 'none' || style.visibility === 'hidden') return false
+      }
+      return true
+    })
+    ;(visibleButton ?? candidates[0])?.focus()
+  }
+
   const handleImport = async (file?: File) => {
     if (!file) return
     try {
@@ -95,7 +127,7 @@ export function App() {
     <div className={`app-shell theme-${config.theme} density-${config.density}`}>
       <header className="mobile-header">
         <a className="brand" href="#workbench" aria-label="CreatorDock home"><span>CD</span> CreatorDock</a>
-        <button type="button" onClick={(event) => openAdd(event.currentTarget)}>Add destination</button>
+        <button ref={mobileAddButton} type="button" onClick={(event) => openAdd(event.currentTarget)}>Add destination</button>
       </header>
 
       <aside className="sidebar">
@@ -175,7 +207,14 @@ export function App() {
               aria-label="Search destinations"
             />
           </label>
-          <button className="primary-action" type="button" onClick={(event) => openAdd(event.currentTarget)}>Add destination</button>
+          <button
+            ref={workbenchAddButton}
+            className="primary-action"
+            type="button"
+            onClick={(event) => openAdd(event.currentTarget)}
+          >
+            Add destination
+          </button>
         </header>
 
         <section className="hero" aria-labelledby="workbench-heading">
@@ -200,12 +239,13 @@ export function App() {
             </div>
           ) : (
             <div className="platform-grid">
-              {visibleEntries.map((item) => (
+              {visibleEntries.map((item, visibleIndex) => (
                 <DestinationCard
                   entry={item}
                   index={config.entries.findIndex((entry) => entry.id === item.id)}
                   key={item.id}
-                  total={config.entries.length}
+                  canMoveEarlier={visibleIndex > 0}
+                  canMoveLater={visibleIndex < visibleEntries.length - 1}
                   onDelete={(button) => {
                     returnFocus.current = button
                     setDeleteTarget(item)
@@ -214,7 +254,13 @@ export function App() {
                     returnFocus.current = button
                     setEditingEntry(item)
                   }}
+                  onEditButton={(button) => {
+                    if (button) entryActionButtons.current.set(item.id, button)
+                    else entryActionButtons.current.delete(item.id)
+                  }}
                   onMove={moveEntry}
+                  onMoveEarlier={() => moveVisibleEntry(item.id, -1)}
+                  onMoveLater={() => moveVisibleEntry(item.id, 1)}
                 />
               ))}
             </div>
@@ -234,6 +280,11 @@ export function App() {
             setDeleteTarget(null)
           }}
           onConfirm={() => {
+            const deletedVisibleIndex = visibleEntries.findIndex((entry) => entry.id === deleteTarget.id)
+            const focusEntry = visibleEntries[deletedVisibleIndex + 1] ?? visibleEntries[deletedVisibleIndex - 1]
+            const entryAction = focusEntry ? entryActionButtons.current.get(focusEntry.id) : undefined
+            if (entryAction) entryAction.focus()
+            else focusAddDestination()
             commitConfig(deleteLaunchEntry(config, deleteTarget.id))
             setDeleteTarget(null)
           }}
@@ -249,6 +300,7 @@ export function App() {
             setResetOpen(false)
           }}
           onConfirm={() => {
+            returnFocus.current?.focus()
             commitConfig(createDefaultConfig())
             setActiveGroup(undefined)
             setQuery('')
@@ -306,17 +358,25 @@ function CategoryNavigation({
 function DestinationCard({
   entry,
   index,
-  total,
+  canMoveEarlier,
+  canMoveLater,
   onDelete,
   onEdit,
+  onEditButton,
   onMove,
+  onMoveEarlier,
+  onMoveLater,
 }: {
   entry: LaunchEntry
   index: number
-  total: number
+  canMoveEarlier: boolean
+  canMoveLater: boolean
   onDelete: (button: HTMLButtonElement) => void
   onEdit: (button: HTMLButtonElement) => void
+  onEditButton: (button: HTMLButtonElement | null) => void
   onMove: (id: string, destinationIndex: number) => void
+  onMoveEarlier: () => void
+  onMoveLater: () => void
 }) {
   const preset = entry.platformPresetId ? presetById.get(entry.platformPresetId) : undefined
   const shortcutDetails = [
@@ -359,20 +419,27 @@ function DestinationCard({
         <button
           type="button"
           aria-label={`Move ${entry.displayName} earlier`}
-          disabled={index === 0}
-          onClick={() => onMove(entry.id, index - 1)}
+          disabled={!canMoveEarlier}
+          onClick={onMoveEarlier}
         >
           ↑
         </button>
         <button
           type="button"
           aria-label={`Move ${entry.displayName} later`}
-          disabled={index === total - 1}
-          onClick={() => onMove(entry.id, index + 1)}
+          disabled={!canMoveLater}
+          onClick={onMoveLater}
         >
           ↓
         </button>
-        <button type="button" aria-label={`Edit ${entry.displayName}`} onClick={(event) => onEdit(event.currentTarget)}>Edit</button>
+        <button
+          ref={onEditButton}
+          type="button"
+          aria-label={`Edit ${entry.displayName}`}
+          onClick={(event) => onEdit(event.currentTarget)}
+        >
+          Edit
+        </button>
         <button type="button" aria-label={`Delete ${entry.displayName}`} onClick={(event) => onDelete(event.currentTarget)}>Delete</button>
       </div>
     </article>
@@ -437,23 +504,7 @@ function EntryDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="entry-dialog-title"
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') onClose()
-          if (event.key === 'Tab') {
-            const controls = [...event.currentTarget.querySelectorAll<HTMLElement>(
-              'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled)',
-            )]
-            const first = controls[0]
-            const last = controls.at(-1)
-            if (event.shiftKey && document.activeElement === first) {
-              event.preventDefault()
-              last?.focus()
-            } else if (!event.shiftKey && document.activeElement === last) {
-              event.preventDefault()
-              first?.focus()
-            }
-          }
-        }}
+        onKeyDown={(event) => containDialogFocus(event, onClose)}
       >
         <h2 id="entry-dialog-title">{title}</h2>
         <form onSubmit={submit}>
@@ -531,9 +582,7 @@ function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-title"
         aria-describedby="confirm-description"
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') onCancel()
-        }}
+        onKeyDown={(event) => containDialogFocus(event, onCancel)}
       >
         <h2 id="confirm-title">{title}</h2>
         <p id="confirm-description">{description}</p>
@@ -544,6 +593,28 @@ function ConfirmDialog({
       </div>
     </div>
   )
+}
+
+function containDialogFocus(event: ReactKeyboardEvent<HTMLElement>, onEscape: () => void): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    onEscape()
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const controls = [...event.currentTarget.querySelectorAll<HTMLElement>(
+    'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled)',
+  )]
+  const first = controls[0]
+  const last = controls.at(-1)
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
 }
 
 function readTextFile(file: File): Promise<string> {
