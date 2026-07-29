@@ -112,7 +112,12 @@ export function filterLaunchEntries(entries: readonly LaunchEntry[], query = '',
   const normalizedQuery = query.trim().toLocaleLowerCase()
   return entries.filter((entry) =>
     (!group || entry.group === group)
-    && (!normalizedQuery || [entry.displayName, entry.destinationUrl, entry.group].some((value) => value.toLocaleLowerCase().includes(normalizedQuery))),
+    && (!normalizedQuery || [
+      entry.displayName,
+      entry.destinationUrl,
+      entry.group,
+      platformPresets.find((preset) => preset.id === entry.platformPresetId)?.name ?? '',
+    ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery))),
   )
 }
 

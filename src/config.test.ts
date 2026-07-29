@@ -105,6 +105,17 @@ describe('search and group filtering', () => {
     expect(matches.map((entry) => entry.id)).toEqual(['video'])
     expect(groupLaunchEntries(config.entries)).toEqual({ Video: [config.entries[0]], Writing: [config.entries[1]] })
   })
+
+  it('finds a preset entry by platform name when its account label is different', () => {
+    const config = addLaunchEntry(emptyConfig(), {
+      displayName: 'Newsletter account',
+      destinationUrl: 'https://mp.weixin.qq.com/',
+      group: 'Clients',
+      platformPresetId: 'wechat-official-accounts',
+    }, ids('wechat-client'))
+
+    expect(filterLaunchEntries(config.entries, 'WeChat Official Accounts')).toEqual(config.entries)
+  })
 })
 
 describe('persistence, import and shortcut export', () => {
