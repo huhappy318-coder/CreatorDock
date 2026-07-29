@@ -279,10 +279,22 @@ describe('preferences, backup, and recovery', () => {
     expect(screen.getByRole('link', { name: /Imported account/ })).toBeInTheDocument()
   })
 
-  it('downloads full and shortcut-only exports and requires confirmation before reset', () => {
-    seed(config([entry({ createShortcut: true })]))
+  it('downloads generated full and shortcut-only JSON exports and requires confirmation before reset', async () => {
+    seed(config([entry({
+      displayName: 'Profiled account',
+      browserTarget: 'chrome',
+      profileDirectoryName: 'Profile 2',
+      createShortcut: true,
+    })]))
     const downloads: string[] = []
-    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:download') })
+    const blobs: Blob[] = []
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn((blob: Blob) => {
+        blobs.push(blob)
+        return 'blob:download'
+      }),
+    })
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
       downloads.push(this.download)
@@ -292,12 +304,22 @@ describe('preferences, backup, and recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export configuration' }))
     fireEvent.click(screen.getByRole('button', { name: 'Export shortcut file' }))
     expect(downloads).toEqual(['creatordock-config.json', 'creatordock-shortcuts.json'])
+    expect(JSON.parse(await readBlob(blobs[1]))).toEqual({
+      schemaVersion: 1,
+      shortcuts: [{
+        displayName: 'Profiled account',
+        destinationUrl: 'https://example.com/studio',
+        browserTarget: 'chrome',
+        profileDirectoryName: 'Profile 2',
+        createShortcut: true,
+      }],
+    })
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset workbench' }))
     const reset = screen.getByRole('alertdialog', { name: 'Reset workbench?' })
     expect(within(reset).getByRole('button', { name: 'Cancel' })).toHaveFocus()
     fireEvent.click(within(reset).getByRole('button', { name: 'Cancel' }))
-    expect(screen.getByRole('link', { name: /Studio account/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Profiled account/ })).toBeInTheDocument()
 
     const resetButton = screen.getByRole('button', { name: 'Reset workbench' })
     fireEvent.click(resetButton)
@@ -316,3 +338,12 @@ describe('preferences, backup, and recovery', () => {
     await waitFor(() => expect(screen.queryByRole('link', { name: /Xiaohongshu/ })).not.toBeInTheDocument())
   })
 })
+
+function readBlob(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => resolve(String(reader.result)))
+    reader.addEventListener('error', () => reject(reader.error))
+    reader.readAsText(blob)
+  })
+}

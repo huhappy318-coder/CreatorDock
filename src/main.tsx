@@ -638,7 +638,12 @@ function downloadJson(filename: string, contents: string): void {
 const root = document.getElementById('root')
 
 if (root) {
-  createRoot(root).render(
-    <StrictMode><App /></StrictMode>,
-  )
+  void import('./pwa-register').then(({ PwaUpdatePrompt }) => {
+    createRoot(root).render(
+      <StrictMode>
+        <App />
+        <PwaUpdatePrompt />
+      </StrictMode>,
+    )
+  })
 }

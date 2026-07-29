@@ -250,6 +250,33 @@ h1 { font-size: clamp(3rem, 6.7vw, 6.8rem); line-height: .92; margin: 0; }
 .dialog-actions { display: flex; gap: 9px; justify-content: flex-end; margin-top: 8px; }
 .dialog-actions > button:not(.primary-action, .danger-action) { background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 9px 15px; }
 .confirmation p { color: var(--muted); line-height: 1.5; }
+.update-prompt {
+  align-items: center;
+  background: var(--panel, #fffaf2);
+  border: 1px solid var(--border, #d9d0c2);
+  border-radius: 14px;
+  bottom: 20px;
+  box-shadow: 0 16px 50px rgb(0 0 0 / 24%);
+  color: var(--ink, #2a2722);
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  left: 50%;
+  max-width: min(620px, calc(100vw - 32px));
+  padding: 14px 16px;
+  position: fixed;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 30;
+}
+.update-prompt p { margin: 0; }
+.update-prompt div { display: flex; gap: 8px; }
+.update-prompt div > button:not(.primary-action) {
+  background: transparent;
+  border: 1px solid var(--border, #d9d0c2);
+  border-radius: 999px;
+  padding: 9px 14px;
+}
 
 @media (max-width: 780px) {
   .app-shell { display: block; }
@@ -277,4 +304,6 @@ h1 { font-size: clamp(3rem, 6.7vw, 6.8rem); line-height: .92; margin: 0; }
   .hero { padding: 50px 0 44px; }
   .catalog-heading { align-items: start; flex-direction: column; gap: 8px; }
   .platform-grid { grid-template-columns: 1fr; }
+  .update-prompt { align-items: stretch; flex-direction: column; width: calc(100vw - 32px); }
+  .update-prompt div { justify-content: flex-end; }
 }
