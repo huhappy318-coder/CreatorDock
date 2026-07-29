@@ -3,27 +3,25 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: './',
+  base: process.env.CREATORDOCK_BASE_PATH ?? './',
   plugins: [
     react(),
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: [
-        'apple-touch-icon-180x180.png',
-        'creator-dock-mark.svg',
-        'favicon.ico',
-        'maskable-icon-512x512.png',
-        'pwa-64x64.png',
-        'pwa-192x192.png',
-        'pwa-512x512.png',
-      ],
       devOptions: {
         enabled: false,
       },
       workbox: {
         cleanupOutdatedCaches: true,
-        globPatterns: ['**/*.{css,html,js,png,svg,webmanifest}'],
+        globIgnores: [
+          'creator-dock-mark.svg',
+          'manifest.webmanifest',
+          'maskable-icon-512x512.png',
+          'pwa-192x192.png',
+          'pwa-512x512.png',
+        ],
+        globPatterns: ['**/*.{css,html,ico,js,png,svg,webmanifest}'],
         navigateFallback: 'index.html',
         runtimeCaching: [],
       },

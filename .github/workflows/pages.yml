@@ -1,0 +1,86 @@
+name: Verify and deploy GitHub Pages
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install from lockfile
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Configure Pages base path
+        shell: bash
+        run: |
+          repository_name="${GITHUB_REPOSITORY#*/}"
+          if [[ "$repository_name" == *.github.io ]]; then
+            echo "CREATORDOCK_BASE_PATH=/" >> "$GITHUB_ENV"
+          else
+            echo "CREATORDOCK_BASE_PATH=/$repository_name/" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run unit and component tests
+        run: npm test
+
+      - name: Run TypeScript checks
+        run: npm run typecheck
+
+      - name: Build production site
+        run: npm run build
+
+      - name: Check static artifact
+        run: npm run check:dist
+
+      - name: Run production preview browser checks
+        run: npm run test:e2e
+
+      - name: Upload verified static artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: creatordock-static-site
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

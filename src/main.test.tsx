@@ -304,7 +304,17 @@ describe('preferences, backup, and recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export configuration' }))
     fireEvent.click(screen.getByRole('button', { name: 'Export shortcut file' }))
     expect(downloads).toEqual(['creatordock-config.json', 'creatordock-shortcuts.json'])
-    expect(JSON.parse(await readBlob(blobs[1]))).toEqual({
+    const fullText = await readBlob(blobs[0])
+    const shortcutText = await readBlob(blobs[1])
+    const fullExport = JSON.parse(fullText)
+    const shortcutExport = JSON.parse(shortcutText)
+    expect(fullExport).toEqual(config([entry({
+      displayName: 'Profiled account',
+      browserTarget: 'chrome',
+      profileDirectoryName: 'Profile 2',
+      createShortcut: true,
+    })]))
+    expect(shortcutExport).toEqual({
       schemaVersion: 1,
       shortcuts: [{
         displayName: 'Profiled account',
@@ -314,6 +324,10 @@ describe('preferences, backup, and recovery', () => {
         createShortcut: true,
       }],
     })
+    expect(fullText).not.toBe('')
+    expect(shortcutText).not.toBe('')
+    expect(shortcutExport).not.toEqual(fullExport)
+    expect(shortcutText).not.toBe(fullText)
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset workbench' }))
     const reset = screen.getByRole('alertdialog', { name: 'Reset workbench?' })
