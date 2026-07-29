@@ -54,7 +54,9 @@ const createId = (): string => globalThis.crypto?.randomUUID?.() ?? `entry-${Dat
 export function isHttpUrl(value: string): boolean {
   try {
     const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:'
+    return (url.protocol === 'http:' || url.protocol === 'https:')
+      && !url.username
+      && !url.password
   } catch {
     return false
   }
@@ -79,7 +81,9 @@ export function createDefaultConfig(idFactory: IdFactory = createId): CreatorDoc
 
 export function addLaunchEntry(config: CreatorDockConfig, entry: NewLaunchEntry, idFactory: IdFactory = createId): CreatorDockConfig {
   const normalized = normalizeNewEntry(entry)
-  return { ...config, entries: [...config.entries, { ...normalized, id: idFactory() }] }
+  const id = idFactory()
+  if (config.entries.some((existingEntry) => existingEntry.id === id)) throw new Error('Launch entry identifiers must be unique.')
+  return { ...config, entries: [...config.entries, { ...normalized, id }] }
 }
 
 export function editLaunchEntry(config: CreatorDockConfig, id: string, changes: Partial<NewLaunchEntry>): CreatorDockConfig {

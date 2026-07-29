@@ -55,7 +55,7 @@ describe('default configuration and URL validation', () => {
     expect(isHttpUrl(url)).toBe(true)
   })
 
-  it.each(['ftp://example.com', 'file:///tmp/unsafe', 'javascript:alert(1)', 'not a url'])('rejects non-HTTP(S) URL %s', (url) => {
+  it.each(['ftp://example.com', 'file:///tmp/unsafe', 'javascript:alert(1)', 'not a url', 'https://demo-user:demo-pass@example.com/'])('rejects non-HTTP(S) URL %s', (url) => {
     expect(isHttpUrl(url)).toBe(false)
   })
 })
@@ -68,6 +68,12 @@ describe('launch entry mutations', () => {
 
     expect(second.entries.map((entry) => entry.id)).toEqual(['first', 'second'])
     expect(second.entries.map((entry) => entry.platformPresetId)).toEqual(['wechat-official-accounts', 'wechat-official-accounts'])
+  })
+
+  it('rejects an injected identifier that collides with an existing entry', () => {
+    const current = addLaunchEntry(emptyConfig(), { displayName: 'First', destinationUrl: 'https://first.example', group: 'work' }, ids('entry-1'))
+
+    expect(() => addLaunchEntry(current, { displayName: 'Second', destinationUrl: 'https://second.example', group: 'work' }, ids('entry-1'))).toThrow('identifiers must be unique')
   })
 
   it('edits an entry without changing its identifier and rejects unsafe URLs', () => {
@@ -128,6 +134,21 @@ describe('persistence, import and shortcut export', () => {
 
     expect(imported).toEqual({ config: current })
     expect(rejected).toMatchObject({ config: current, error: expect.stringMatching(/HTTP\(S\)|destination URL/i) })
+  })
+
+  it('rejects credential-bearing URLs before they can be added, imported, saved, or shortcut-exported', () => {
+    const credentialUrl = 'https://demo-user:demo-pass@example.com/'
+    const current = addLaunchEntry(emptyConfig(), { displayName: 'Current', destinationUrl: 'https://current.example', group: 'work' }, ids('current'))
+    const unsafeConfig: CreatorDockConfig = {
+      ...current,
+      entries: [{ ...current.entries[0], destinationUrl: credentialUrl }],
+    }
+    const storage = new MemoryStorage()
+
+    expect(() => addLaunchEntry(current, { displayName: 'Unsafe', destinationUrl: credentialUrl, group: 'work' }, ids('unsafe'))).toThrow('HTTP(S)')
+    expect(importConfig(JSON.stringify(unsafeConfig), current)).toMatchObject({ config: current, error: expect.stringMatching(/HTTP\(S\)|destination URL/i) })
+    expect(() => saveConfig(storage, unsafeConfig)).toThrow('HTTP(S)')
+    expect(() => createShortcutExport(unsafeConfig)).toThrow('HTTP(S)')
   })
 
   it('migrates legacy entry arrays to schema version 1', () => {
