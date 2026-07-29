@@ -1,0 +1,28 @@
+:root { color: #25231f; background: #f7f3ec; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button { font: inherit; }
+.shell { max-width: 1220px; margin: 0 auto; padding: 24px 32px 68px; }
+.masthead { align-items: center; border-bottom: 1px solid #d9d2c7; display: flex; gap: 24px; justify-content: space-between; padding-bottom: 20px; }
+.brand { align-items: center; color: inherit; display: flex; font-weight: 740; gap: 9px; letter-spacing: -.04em; text-decoration: none; }
+.brand span { background: #25231f; border-radius: 7px; color: #f7f3ec; font-size: .7rem; letter-spacing: 0; padding: 7px 6px; }
+.masthead p { color: #7d756b; font-size: .69rem; letter-spacing: .13em; margin: 0 auto 0 0; }
+.masthead button { background: #e17045; border: 0; border-radius: 999px; color: #fffaf4; cursor: pointer; font-size: .86rem; padding: 10px 15px; }
+.intro { max-width: 700px; padding: 92px 0 78px; }
+.eyebrow { color: #a55635; font-size: .7rem; font-weight: 700; letter-spacing: .13em; margin: 0 0 13px; }
+h1, h2 { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; letter-spacing: -.055em; }
+h1 { font-size: clamp(3.4rem, 9vw, 7.2rem); line-height: .9; margin: 0; }
+.lede { color: #655f57; font-size: 1.12rem; line-height: 1.55; margin: 30px 0 0; max-width: 510px; }
+.catalog { border-top: 1px solid #d9d2c7; padding-top: 24px; }
+.catalog-heading { align-items: end; display: flex; justify-content: space-between; margin-bottom: 22px; }
+.catalog-heading h2 { font-size: 2.3rem; margin: 0; }
+.catalog-heading > p { color: #7d756b; font-size: .8rem; margin: 0 0 6px; }
+.platform-grid { border-left: 1px solid #d9d2c7; display: grid; grid-template-columns: repeat(4, 1fr); }
+.platform-card { border-bottom: 1px solid #d9d2c7; border-right: 1px solid #d9d2c7; color: inherit; display: grid; gap: 15px; min-height: 185px; padding: 18px; text-decoration: none; transition: background .16s ease; }
+.platform-card:hover, .platform-card:focus-visible { background: #eee6da; outline: 2px solid #a55635; outline-offset: -2px; }
+.card-number, .platform-card > span { color: #837a6f; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
+.platform-card strong { align-self: end; font-size: 1.14rem; letter-spacing: -.035em; }
+.status { justify-self: start; }
+.status.verified { color: #34745d; }
+.status.unverified { color: #a55635; }
+@media (max-width: 760px) { .shell { padding: 18px 18px 46px; } .masthead p { display: none; } .intro { padding: 70px 0 55px; } .platform-grid { grid-template-columns: repeat(2, 1fr); } .catalog-heading { align-items: start; flex-direction: column; gap: 10px; } }
