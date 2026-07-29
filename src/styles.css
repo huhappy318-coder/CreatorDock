@@ -25,4 +25,5 @@ h1 { font-size: clamp(3.4rem, 9vw, 7.2rem); line-height: .9; margin: 0; }
 .status { justify-self: start; }
 .status.verified { color: #34745d; }
 .status.unverified { color: #a55635; }
+.verification-note { color: #837a6f; font-size: .7rem; line-height: 1.35; }
 @media (max-width: 760px) { .shell { padding: 18px 18px 46px; } .masthead p { display: none; } .intro { padding: 70px 0 55px; } .platform-grid { grid-template-columns: repeat(2, 1fr); } .catalog-heading { align-items: start; flex-direction: column; gap: 10px; } }

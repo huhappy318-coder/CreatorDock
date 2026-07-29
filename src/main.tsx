@@ -5,7 +5,7 @@ import './styles.css'
 
 const verifiedCount = platformPresets.filter((preset) => preset.verification === 'verified').length
 
-function App() {
+export function App() {
   return (
     <main className="shell">
       <header className="masthead">
@@ -35,6 +35,7 @@ function App() {
               <strong>{preset.name}</strong>
               <span>{preset.category}</span>
               <span className={`status ${preset.verification}`}>{preset.verification}</span>
+              {preset.verificationNote && <span className="verification-note">{preset.verificationNote}</span>}
             </a>
           ))}
         </div>
@@ -43,6 +44,10 @@ function App() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode><App /></StrictMode>,
-)
+const root = document.getElementById('root')
+
+if (root) {
+  createRoot(root).render(
+    <StrictMode><App /></StrictMode>,
+  )
+}
