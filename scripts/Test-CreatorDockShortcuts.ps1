@@ -8,6 +8,8 @@ if (-not (Test-Path -LiteralPath $helperPath -PathType Leaf)) {
 
 . $helperPath
 
+$script:AssertionCount = 0
+
 function Assert-Equal {
     param(
         [Parameter(Mandatory)]$Actual,
@@ -15,6 +17,7 @@ function Assert-Equal {
         [Parameter(Mandatory)][string]$Message
     )
 
+    $script:AssertionCount++
     if ($Actual -ne $Expected) {
         throw "$Message Expected '$Expected', received '$Actual'."
     }
@@ -27,6 +30,7 @@ function Assert-Throws {
         [Parameter(Mandatory)][string]$Message
     )
 
+    $script:AssertionCount++
     try {
         & $Action
     }
@@ -48,6 +52,37 @@ if ($desktop -and [IO.Path]::GetFullPath($testRoot).StartsWith([IO.Path]::GetFul
 [void](New-Item -ItemType Directory -Path $testRoot)
 
 try {
+    $pretendDesktop = Join-Path $testRoot 'Pretend Desktop'
+    [void](New-Item -ItemType Directory -Path $pretendDesktop)
+    $blockedId = [guid]'00000000-0000-0000-0000-000000000001'
+    $blockedCandidate = Join-Path $pretendDesktop 'CreatorDock-SelfTest-00000000000000000000000000000001'
+    $previousTemp = $env:TEMP
+    $previousTmp = $env:TMP
+    try {
+        $env:TEMP = $pretendDesktop
+        $env:TMP = $pretendDesktop
+        Assert-Throws {
+            Invoke-CreatorDockShortcutSelfTest `
+                -DesktopDirectory $pretendDesktop `
+                -SelfTestId $blockedId
+        } 'Desktop' 'A Desktop-backed temporary root must be refused.'
+        Assert-Equal (Test-Path -LiteralPath $blockedCandidate) $false 'Desktop refusal must happen before creating the candidate directory.'
+
+        $preservedId = [guid]'00000000-0000-0000-0000-000000000002'
+        $preservedCandidate = Join-Path $pretendDesktop 'CreatorDock-SelfTest-00000000000000000000000000000002'
+        [void](New-Item -ItemType Directory -Path $preservedCandidate)
+        Assert-Throws {
+            Invoke-CreatorDockShortcutSelfTest `
+                -DesktopDirectory $pretendDesktop `
+                -SelfTestId $preservedId
+        } 'Desktop' 'Desktop refusal must also protect an existing candidate.'
+        Assert-Equal (Test-Path -LiteralPath $preservedCandidate) $true 'Desktop refusal must not delete an existing candidate directory.'
+    }
+    finally {
+        $env:TEMP = $previousTemp
+        $env:TMP = $previousTmp
+    }
+
     $validPath = Join-Path $testRoot 'valid.json'
     @'
 {
@@ -148,7 +183,7 @@ try {
 
     [pscustomobject]@{
         Passed = $true
-        Assertions = 21
+        Assertions = $script:AssertionCount
         TestRoot = $testRoot
         DetectedBrowserPaths = $detected
     } | ConvertTo-Json -Depth 5

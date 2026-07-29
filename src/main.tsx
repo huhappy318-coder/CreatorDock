@@ -638,12 +638,22 @@ function downloadJson(filename: string, contents: string): void {
 const root = document.getElementById('root')
 
 if (root) {
-  void import('./pwa-register').then(({ PwaUpdatePrompt }) => {
-    createRoot(root).render(
-      <StrictMode>
-        <App />
-        <PwaUpdatePrompt />
-      </StrictMode>,
-    )
-  })
+  const applicationRoot = createRoot(root)
+  applicationRoot.render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+  void import('./pwa-register')
+    .then(({ PwaUpdatePrompt }) => {
+      applicationRoot.render(
+        <StrictMode>
+          <App />
+          <PwaUpdatePrompt />
+        </StrictMode>,
+      )
+    })
+    .catch(() => {
+      // PWA update registration is optional; the local application remains usable.
+    })
 }

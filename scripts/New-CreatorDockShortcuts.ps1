@@ -324,14 +324,28 @@ function New-CreatorDockShortcuts {
 
 function Invoke-CreatorDockShortcutSelfTest {
     [CmdletBinding()]
-    param()
+    param(
+        [string]$TemporaryParent = [IO.Path]::GetTempPath(),
+        [string]$DesktopDirectory = [Environment]::GetFolderPath('Desktop'),
+        [guid]$SelfTestId = [guid]::NewGuid()
+    )
 
-    $temporaryParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
-    $temporaryRoot = Join-Path $temporaryParent ("CreatorDock-SelfTest-{0}" -f [guid]::NewGuid().ToString('N'))
+    $temporaryParent = [IO.Path]::GetFullPath($TemporaryParent).TrimEnd('\')
+    $temporaryRoot = Join-Path $temporaryParent ("CreatorDock-SelfTest-{0}" -f $SelfTestId.ToString('N'))
     $temporaryRoot = [IO.Path]::GetFullPath($temporaryRoot)
     $leaf = Split-Path -Leaf $temporaryRoot
     if ((Split-Path -Parent $temporaryRoot) -ne $temporaryParent -or $leaf -notmatch '^CreatorDock-SelfTest-[0-9a-f]{32}$') {
         throw "Refusing unsafe self-test directory: $temporaryRoot"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($DesktopDirectory)) {
+        $desktopRoot = [IO.Path]::GetFullPath($DesktopDirectory).TrimEnd('\')
+        $desktopPrefix = "$desktopRoot$([IO.Path]::DirectorySeparatorChar)"
+        if (
+            $temporaryRoot.Equals($desktopRoot, [StringComparison]::OrdinalIgnoreCase) -or
+            $temporaryRoot.StartsWith($desktopPrefix, [StringComparison]::OrdinalIgnoreCase)
+        ) {
+            throw "Refusing Desktop-backed self-test directory: $temporaryRoot"
+        }
     }
 
     $browserPaths = Find-CreatorDockBrowsers

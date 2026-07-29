@@ -113,7 +113,7 @@ First GREEN:
 
 ```text
 Passed: true
-Assertions: 20
+Assertions: 19
 DetectedBrowserPaths: chrome, edge
 ```
 
@@ -129,7 +129,7 @@ After the minimal schema-shape fix:
 
 ```text
 Passed: true
-Assertions: 21
+Assertions: 20
 DetectedBrowserPaths: chrome, edge
 ```
 
@@ -322,3 +322,123 @@ relative asset and manifest paths present
   are both explicitly included and matched by the local glob. The build
   succeeds and all entries remain local; this is not a safety or correctness
   issue, but Task 5 may choose to de-duplicate the generated list if desired.
+
+## Review fix Round 1/5
+
+Review source:
+`.superpowers/sdd/2026-07-29-creatordock-v1/task-4-review.md`.
+
+Scope was limited to the three Important findings. The Minor duplicate
+precache finding was intentionally left unchanged for final review, as
+directed.
+
+### Desktop-backed temporary directory refusal
+
+The public self-test previously checked only the candidate's parent and GUID
+leaf. It now resolves the self-test candidate and Desktop boundary before
+browser detection, profile enumeration, or any `New-Item`.
+
+The test maps both `TEMP` and `TMP` to a controlled temp-only “Pretend Desktop”
+directory and lets the self-test use its normal `[IO.Path]::GetTempPath()`
+default. Fixed GUIDs make both filesystem outcomes directly observable.
+
+RED:
+
+```text
+A Desktop-backed temporary root must be refused.
+Wrong error: A parameter cannot be found that matches parameter name
+'TemporaryParent'.
+```
+
+GREEN behavior:
+
+```text
+- A nonexistent CreatorDock-SelfTest-<fixed GUID> candidate remained absent.
+- A pre-existing CreatorDock-SelfTest-<fixed GUID> candidate remained present.
+- Both calls failed with "Refusing Desktop-backed self-test directory".
+- TEMP and TMP were restored in finally.
+```
+
+The controlled “Pretend Desktop” lives under the assertion suite's GUID-named
+temp root. The real Desktop was not written or enumerated.
+
+### Accurate assertion accounting
+
+The assertion suite no longer reports a hard-coded count.
+`Assert-Equal` and `Assert-Throws` increment one shared counter for every
+executed assertion, and the final JSON reads that counter.
+
+The original report's two historical counts were corrected:
+
+```text
+Initial helper GREEN: 19 executed assertions
+Schema-array GREEN: 20 executed assertions
+```
+
+The four new Desktop boundary assertions produce the current result:
+
+```text
+Passed: true
+Assertions: 24
+```
+
+### Optional PWA chunk rejection
+
+The app previously waited for `import('./pwa-register')` before creating its
+React root.
+
+RED:
+
+```text
+npm test -- src/startup.test.tsx
+1 failed
+Unable to find role="heading" and name "Begin where your work lives."
+Vitest caught 1 unhandled rejection:
+PWA registration chunk unavailable
+```
+
+GREEN:
+
+```text
+npm test -- src/startup.test.tsx src/pwa-update.test.tsx src/main.test.tsx
+3 test files passed
+14 tests passed
+```
+
+`App` is now rendered immediately. A successful dynamic import adds
+`PwaUpdatePrompt` to the same React root; a rejected optional import is caught
+without unmounting or gating the local application.
+
+### Final Round 1 verification
+
+```text
+npm test
+5 test files passed
+37 tests passed
+
+npm run build
+TypeScript build passed
+Vite production build passed
+35 modules transformed
+PWA generateSW completed
+20 precache entries
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass \
+  -File .\scripts\Test-CreatorDockShortcuts.ps1
+Passed: true
+Assertions: 24
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass \
+  -File .\scripts\New-CreatorDockShortcuts.ps1 -SelfTest
+Passed: true
+CreatedCount: 3
+TemporaryDirectoryRemoved: true
+All target/argument/URL checks: true
+
+ResidualCreatorDockTempDirectories: 0
+git diff --check: exit 0
+```
+
+No Desktop output, browser/platform launch, profile-content read, dependency
+change, remote push, or Minor-finding change was made. The Round 1 commit hash
+is reported in the task handoff after the final commit.
