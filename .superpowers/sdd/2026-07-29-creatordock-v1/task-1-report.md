@@ -54,4 +54,4 @@ The visual work is intentionally only a static foundation mockup; persistence, a
 
 ## Commit
 
-Commit hash: to be filled after the final local commit is created.
+Implementation commit hash: `7c00fd0e8c44d42a3005f50ee2b34d53e8769bcc`.
