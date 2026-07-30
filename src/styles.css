@@ -212,6 +212,43 @@ h1 { font-size: clamp(3rem, 6.7vw, 6.8rem); line-height: .92; margin: 0; }
 .empty-state h3 { margin-top: 0; }
 .empty-state p { color: var(--muted); margin-bottom: 0; }
 
+.ai-workbench { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 26px; }
+.ai-heading, .panel-title { align-items: baseline; display: flex; gap: 16px; justify-content: space-between; }
+.ai-heading h2 { font-family: Georgia, "Times New Roman", serif; font-size: 2.25rem; font-weight: 400; letter-spacing: -.048em; margin: 0; }
+.ai-privacy, .panel-title > span { color: var(--muted); font-size: .76rem; }
+.ai-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 22px; }
+.ai-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 15px; padding: 20px; }
+.generation-panel { grid-column: 1 / -1; }
+.panel-title h3 { font-size: 1.1rem; letter-spacing: -.02em; margin: 0; }
+.panel-help { color: var(--muted); font-size: .77rem; line-height: 1.5; margin: 10px 0 14px; }
+.ai-form { display: grid; gap: 11px; margin-top: 12px; }
+.ai-field { display: grid; font-size: .78rem; font-weight: 650; gap: 5px; }
+.ai-field small { color: var(--muted); font-weight: 400; }
+.ai-field input, .ai-field select, .ai-field textarea { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; min-height: 38px; padding: 8px 10px; resize: vertical; }
+.ai-field textarea { min-height: 80px; line-height: 1.5; }
+.ai-two-col { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ai-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.ai-actions button { background: transparent; border: 1px solid var(--border); border-radius: 999px; font-size: .78rem; padding: 8px 12px; }
+.ai-actions button:hover { background: var(--surface); }
+.ai-actions .primary-action { border: 0; color: #fffaf4; }
+.ai-message { background: #dfeee6; border: 1px solid var(--border); border-radius: 9px; color: #245b45; font-size: .82rem; margin: 14px 0 0; padding: 9px 11px; }
+.ai-message.error { background: #f7dfdc; color: #8b2f2b; }
+.model-list, .style-list { display: grid; gap: 7px; margin-top: 14px; }
+.model-card, .style-card { align-items: stretch; border: 1px solid var(--border); border-radius: 10px; display: flex; overflow: hidden; }
+.model-card.selected, .style-card.selected { border-color: var(--accent); }
+.model-select { background: transparent; border: 0; display: grid; gap: 3px; min-width: 0; padding: 10px; text-align: left; }
+.model-select strong { font-size: .84rem; }
+.model-select span, .model-select small { color: var(--muted); font-size: .7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-card-actions { align-items: center; display: flex; gap: 3px; margin-left: auto; padding: 5px; }
+.model-card-actions button { background: transparent; border: 0; border-radius: 6px; color: var(--muted); font-size: .7rem; padding: 6px; }
+.model-card-actions button:hover { background: var(--surface); color: var(--ink); }
+.humanization-box { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 16px; }
+.task-input { min-height: 130px !important; }
+.generate-button { margin-top: 9px; }
+.generation-output { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-top: 16px; padding: 14px; }
+.output-title { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.generation-output pre { font-family: inherit; line-height: 1.65; margin: 10px 0 0; white-space: pre-wrap; }
+
 .density-compact .workbench { padding-bottom: 38px; }
 .density-compact .hero { padding: 48px 0 42px; }
 .density-compact .platform-grid { gap: 9px; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); }
@@ -304,6 +341,10 @@ h1 { font-size: clamp(3rem, 6.7vw, 6.8rem); line-height: .92; margin: 0; }
   .hero { padding: 50px 0 44px; }
   .catalog-heading { align-items: start; flex-direction: column; gap: 8px; }
   .platform-grid { grid-template-columns: 1fr; }
+  .ai-grid { grid-template-columns: 1fr; }
+  .generation-panel { grid-column: auto; }
+  .ai-heading { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .ai-two-col { grid-template-columns: 1fr; }
   .update-prompt { align-items: stretch; flex-direction: column; width: calc(100vw - 32px); }
   .update-prompt div { justify-content: flex-end; }
 }

@@ -29,6 +29,7 @@ import {
   type ThemeSetting,
 } from './config'
 import './styles.css'
+import { AiWorkbench } from './aiWorkbench'
 
 const presetById = new Map(platformPresets.map((preset) => [preset.id, preset]))
 
@@ -266,6 +267,7 @@ export function App() {
             </div>
           )}
         </section>
+        <AiWorkbench />
       </main>
       {editingEntry !== undefined && (
         <EntryDialog entry={editingEntry} onClose={closeEditor} onSave={saveEntry} />

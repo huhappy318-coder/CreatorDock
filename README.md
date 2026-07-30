@@ -73,6 +73,14 @@ PWA 只缓存 CreatorDock 应用壳；外部创作平台不会被离线缓存。
 
 配置默认保存在当前浏览器 origin 的 `localStorage`，不会自动上传。导出文件可能暴露账号标签、工作流结构和访问 URL，请按私人文件管理。CreatorDock 不读取或保存密码、Cookie、Token、登录状态、浏览器账号身份或浏览器资料内容。
 
+### 多模型写作与个人风格
+
+首页的“写作实验室”是可选能力。你可以添加多个 OpenAI 兼容、DashScope、Gemini 或 Anthropic 模型，填写自己的 Base URL、模型 ID 和 API Key；模型元数据保存在本机，API Key 使用你设置的本机解锁口令通过 PBKDF2 + AES-GCM 加密。口令只存在当前页面内存中，不会保存、上传或写入导出文件。
+
+每次生成会按固定顺序组合任务、当前风格描述、`.txt/.md` 样本、可编辑的去 AI 味规则和任务要求。样本仅作风格参考，不会被当作指令。可以创建多个风格、随时切换或临时关闭风格规则，并维护禁用词与必须习惯。
+
+请求由浏览器直接发送到你填写的服务地址；项目不提供代理、额度、账号或内置 Key。部分服务商的浏览器跨域策略可能阻止直连，这属于服务商配置边界，CreatorDock 不绕过 CORS，也不会把 Key 发到项目服务器。使用“导出 AI 配置”时只导出模型元数据和 `hasApiKey` 标记，导入后需要重新填写 Key。
+
 ### Windows 本地 launcher 与快捷方式 helper
 
 先安装依赖并完成构建：
@@ -197,6 +205,23 @@ workflow structure, and destination URLs, so treat them as private files.
 CreatorDock never reads or stores passwords, cookies, tokens, login state,
 browser account identity, or browser-profile contents.
 
+### Multi-model writing and personal style
+
+The optional “Writing lab” supports multiple OpenAI-compatible, DashScope,
+Gemini, and Anthropic profiles. Users supply the provider URL, model ID, and
+their own key. A key is encrypted locally with a user-provided passphrase using
+PBKDF2 + AES-GCM; the passphrase is never persisted, exported, logged, or sent
+to a CreatorDock server. Browser requests go directly to the supplied URL, so
+provider CORS rules still apply and CreatorDock includes no proxy, quota,
+account, or built-in key.
+
+Writing requests use one prompt pipeline: task, style description, `.txt/.md`
+samples, editable anti-AI rules, then task requirements. Samples are labeled as
+stylistic references rather than instructions. Style presets can be switched or
+temporarily disabled, with forbidden words and required habits editable in the
+same panel. AI exports contain model metadata and a `hasApiKey` flag only;
+imported profiles require the key to be entered again.
+
 ### Durable Windows launcher and shortcut helper
 
 Install dependencies and create a production build:
@@ -256,10 +281,12 @@ No local script creates a remote or pushes the repository.
 
 ### Explicit non-goals
 
-CreatorDock v1 does not provide login, credential management, publishing,
-platform analytics, cloud sync, a browser extension, Electron, or Tauri. It
-does not operate platform accounts, identify accounts inside browser profiles,
-or bypass platform authentication.
+CreatorDock v1 does not provide platform login or credential management,
+publishing, platform analytics, cloud sync, a browser extension, Electron, or
+Tauri. The optional AI key is user-supplied and locally encrypted; it is not a
+platform credential and is never sent to a CreatorDock server. The app does not
+operate platform accounts, identify accounts inside browser profiles, or bypass
+platform authentication.
 
 ## License
 
