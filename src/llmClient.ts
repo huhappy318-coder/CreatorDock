@@ -40,8 +40,8 @@ function buildPayload(profile: ModelProfile, system: string, task: string, strea
 
 function buildRequest(profile: ModelProfile, apiKey: string, payload: Record<string, unknown>, stream: boolean): { url: string, init: RequestInit } {
   const base = profile.baseUrl.replace(/\/+$/, '')
-  if (profile.provider === 'gemini') { const action = stream ? 'streamGenerateContent' : 'generateContent'; const query = stream ? 'alt=sse&' : ''; return { url: `${base}/v1beta/models/${encodeURIComponent(profile.model)}:${action}?${query}key=${encodeURIComponent(apiKey)}`, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) } } }
-  const endpoint = profile.provider === 'anthropic' ? `${base}/v1/messages` : `${base}/chat/completions`
+  if (profile.provider === 'gemini') { const action = stream ? 'streamGenerateContent' : 'generateContent'; const query = stream ? 'alt=sse&' : ''; const versionedBase = base.endsWith('/v1beta') ? base : `${base}/v1beta`; return { url: `${versionedBase}/models/${encodeURIComponent(profile.model)}:${action}?${query}key=${encodeURIComponent(apiKey)}`, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) } } }
+  const endpoint = profile.provider === 'anthropic' ? `${base}${base.endsWith('/v1') ? '' : '/v1'}/messages` : `${base}/chat/completions`
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (profile.provider === 'anthropic') Object.assign(headers, { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' })
   else headers.Authorization = `Bearer ${apiKey}`

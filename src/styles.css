@@ -243,6 +243,14 @@ h1 { font-size: clamp(3rem, 6.7vw, 6.8rem); line-height: .92; margin: 0; }
 .model-card-actions button { background: transparent; border: 0; border-radius: 6px; color: var(--muted); font-size: .7rem; padding: 6px; }
 .model-card-actions button:hover { background: var(--surface); color: var(--ink); }
 .humanization-box { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 16px; }
+.sample-empty { margin: 0; }
+.sample-list { display: grid; gap: 7px; }
+.sample-row { align-items: end; border: 1px solid var(--border); border-radius: 9px; display: flex; gap: 8px; padding: 8px; }
+.sample-row .ai-field { flex: 1; }
+.sample-row .ai-field input { min-height: 34px; }
+.sample-size { color: var(--muted); font-size: .7rem; margin-bottom: 9px; white-space: nowrap; }
+.sample-row > button { background: transparent; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .7rem; margin-bottom: 3px; padding: 6px 9px; }
+.sample-row > button:hover { background: var(--surface); color: var(--ink); }
 .task-input { min-height: 130px !important; }
 .generate-button { margin-top: 9px; }
 .generation-output { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-top: 16px; padding: 14px; }

@@ -26,6 +26,7 @@ export const DEFAULT_HUMANIZATION_RULES: HumanizationRules = {
     '少用排比句、过度整齐的结构和空洞的升华，不要把每段写成模板。',
     '多写具体细节、真实感受和口语化表达，允许句子不完美。',
     '保持自然节奏，允许适度重复、停顿和情绪波动。',
+    '避免过度总结、空泛的说教和没有新信息的结尾。',
     '禁止出现“作为AI”“我理解您的需求”等自我暴露或客服腔语句。',
   ].join('\n'),
   forbiddenWords: [],
@@ -64,4 +65,3 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
   sections.push(['TASK_REQUIREMENTS', input.task.trim()])
   return sections.map(([heading, content]) => `## ${heading}\n${content}`).join('\n\n')
 }
-
