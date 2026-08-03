@@ -1,0 +1,22 @@
+[package]
+name = "creator_dock"
+version = "0.1.0"
+description = "CreatorDock desktop workbench"
+authors = ["CreatorDock contributors"]
+edition = "2021"
+rust-version = "1.77"
+build = "build.rs"
+
+[lib]
+name = "creator_dock_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-store = "2"
+url = "2"

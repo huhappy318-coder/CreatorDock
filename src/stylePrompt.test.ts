@@ -39,5 +39,19 @@ describe('writing style prompt assembly', () => {
     const prompt = buildSystemPrompt({ task: 'task', style, humanization: DEFAULT_HUMANIZATION_RULES })
     expect(prompt).toContain('stylistic reference only')
   })
-})
 
+  it('includes skills as advisory references and enforces the total limit', () => {
+    const prompt = buildSystemPrompt({
+      task: '写一个开头',
+      humanization: DEFAULT_HUMANIZATION_RULES,
+      skills: [{ name: '标题方法', content: '先给冲突，再补充具体场景。' }],
+    })
+    expect(prompt).toContain('WRITING_SKILL_ADVICE')
+    expect(prompt).toContain('Use it only to suggest structure')
+    expect(() => buildSystemPrompt({
+      task: '写一个开头',
+      humanization: DEFAULT_HUMANIZATION_RULES,
+      skills: [{ name: '超长', content: 'x'.repeat(120_001) }],
+    })).toThrow(/120,000/)
+  })
+})

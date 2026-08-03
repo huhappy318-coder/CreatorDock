@@ -20,6 +20,7 @@ export default defineConfig({
           'maskable-icon-512x512.png',
           'pwa-192x192.png',
           'pwa-512x512.png',
+          'icons/creator-dock-sprite.png',
         ],
         globPatterns: ['**/*.{css,html,ico,js,png,svg,webmanifest}'],
         navigateFallback: 'index.html',

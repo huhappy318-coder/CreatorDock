@@ -8,6 +8,10 @@ import {
   exportAiConfig,
   importAiConfig,
   loadAiConfig,
+  findModelPreset,
+  modelInputFromPreset,
+  MODEL_PRESETS,
+  PROVIDER_OPTIONS,
   saveAiConfig,
   setDefaultModel,
   unlockModelApiKey,
@@ -15,35 +19,69 @@ import {
   updateModelProfile,
   updateStylePreset,
   type AiConfig,
+  type ModelPreset,
   type ModelProfileInput,
-  type ProviderKind,
 } from './aiConfig'
 import { createLLMClient } from './llmClient'
+import { discoverModels, type DiscoveredModel } from './modelDiscovery'
+import { SkillManager } from './skillManager'
+import { loadWritingSkills } from './skillConfig'
+import { CoverWorkbench } from './coverWorkbench'
+import { FloatingPanel } from './floatingPanel'
 import { type StyleSample } from './stylePrompt'
+import type { LanguageSetting } from './i18n'
 
-const emptyModel: ModelProfileInput = {
-  name: '', provider: 'openai-compatible', baseUrl: '', model: '', apiKey: '',
-  temperature: 0.7, maxTokens: 4096, streaming: true, imageGeneration: false, enabled: true,
-}
+const defaultModelPreset = MODEL_PRESETS[0]
+const emptyModel: ModelProfileInput = modelInputFromPreset(defaultModelPreset)
 
 const emptyStyle = { name: '', description: '', samples: [] as StyleSample[], isDefault: false }
 
-export function AiWorkbench() {
+function modelFormForProfile(model: Parameters<typeof findModelPreset>[0] & { id?: string; name: string; baseUrl: string; temperature?: number; maxTokens?: number; streaming: boolean; imageGeneration: boolean; enabled: boolean }): { form: ModelProfileInput, presetId?: string } {
+  const preset = findModelPreset(model) ?? (model.name.trim() === '1' || model.model === 'deepseek-v4' || model.baseUrl.includes('platform.deepseek.com')
+    ? MODEL_PRESETS.find((item) => item.provider === model.provider)
+    : undefined)
+  if (!preset) return {
+    form: { name: model.name, provider: model.provider, baseUrl: model.baseUrl, model: model.model, apiKey: '', temperature: model.temperature, maxTokens: model.maxTokens, streaming: model.streaming, imageGeneration: model.imageGeneration, enabled: model.enabled },
+  }
+  return { form: { ...modelInputFromPreset(preset), enabled: model.enabled }, presetId: preset.id }
+}
+
+function modelPresetFromDiscovered(provider: ModelPreset['provider'], baseUrl: string, model: DiscoveredModel): ModelPreset {
+  return {
+    id: `${provider}:remote:${model.id}`,
+    label: model.label,
+    provider,
+    baseUrl,
+    model: model.id,
+    temperature: 0.7,
+    maxTokens: model.maxOutputTokens ?? 8192,
+    streaming: true,
+    imageGeneration: false,
+  }
+}
+
+export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting }) {
   const [loaded, setLoaded] = useState(() => loadAiConfig(localStorage))
   const { config } = loaded
+  const tr = (zh: string, en: string): string => language === 'en' ? en : zh
   const [passphrase, setPassphrase] = useState('')
   const [modelForm, setModelForm] = useState<ModelProfileInput>(emptyModel)
+  const [selectedPresetId, setSelectedPresetId] = useState(defaultModelPreset.id)
+  const [modelChoices, setModelChoices] = useState<ModelPreset[]>([...MODEL_PRESETS])
+  const [refreshingModels, setRefreshingModels] = useState(false)
+  const [modelRefreshStatus, setModelRefreshStatus] = useState('')
   const [editingModelId, setEditingModelId] = useState<string>()
   const [styleForm, setStyleForm] = useState(emptyStyle)
   const [editingStyleId, setEditingStyleId] = useState<string>()
   const [selectedModelId, setSelectedModelId] = useState(config.defaultModelId ?? '')
   const [selectedStyleId, setSelectedStyleId] = useState(config.defaultStyleId ?? '')
-  const [styleEnabled, setStyleEnabled] = useState(true)
   const [task, setTask] = useState('')
   const [output, setOutput] = useState('')
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [running, setRunning] = useState(false)
+  const [activeDialog, setActiveDialog] = useState<'model' | 'style' | 'skill' | null>(null)
+  const [workspace, setWorkspace] = useState<'writing' | 'cover'>('writing')
   const configFileInput = useRef<HTMLInputElement>(null)
   const sampleFileInput = useRef<HTMLInputElement>(null)
 
@@ -57,25 +95,42 @@ export function AiWorkbench() {
 
   const clearMessage = () => { setStatus(''); setError('') }
 
+  const refreshModels = async () => {
+    clearMessage(); setModelRefreshStatus('')
+    if (!modelForm.apiKey.trim()) { setError(tr('请先填入 API Key，再从平台刷新型号。', 'Enter the API key before refreshing models.')); return }
+    setRefreshingModels(true)
+    try {
+      const discovered = await discoverModels({ provider: modelForm.provider, baseUrl: modelForm.baseUrl ?? '', apiKey: modelForm.apiKey })
+      const choices = discovered.map((model) => modelPresetFromDiscovered(modelForm.provider, modelForm.baseUrl ?? '', model))
+      setModelChoices((current) => [...current.filter((item) => !choices.some((choice) => choice.id === item.id)), ...choices])
+      const first = choices[0]
+      setSelectedPresetId(first.id)
+      setModelForm({ ...modelInputFromPreset(first, modelForm.apiKey), enabled: modelForm.enabled ?? true })
+      setModelRefreshStatus(tr(`已从平台刷新 ${choices.length} 个型号。`, `Refreshed ${choices.length} models from the provider.`))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : tr('型号刷新失败。', 'Model refresh failed.'))
+    } finally { setRefreshingModels(false) }
+  }
+
   const submitModel = async (event: FormEvent) => {
     event.preventDefault(); clearMessage()
     try {
-      if (!passphrase) throw new Error('请先设置本机解锁口令；口令不会保存。')
+      if (!passphrase) throw new Error(tr('请先设置本机解锁口令；口令不会保存。', 'Set a local unlock passphrase first; it is never saved.'))
       const next = editingModelId
         ? await updateModelProfile(config, editingModelId, modelForm, passphrase)
         : await addModelProfile(config, modelForm, passphrase)
       commit(next)
       setSelectedModelId(next.defaultModelId ?? '')
-      setModelForm(emptyModel); setEditingModelId(undefined); setStatus('模型已保存。API Key 只以加密形式留在本机。')
-    } catch (caught) { setError(caught instanceof Error ? caught.message : '模型保存失败。') }
+      setModelForm(emptyModel); setSelectedPresetId(defaultModelPreset.id); setEditingModelId(undefined); setStatus(tr('模型已保存。API Key 只以加密形式留在本机。', 'Model saved. The API key remains encrypted on this device.'))
+    } catch (caught) { setError(caught instanceof Error ? caught.message : tr('模型保存失败。', 'Model could not be saved.')) }
   }
 
   const submitStyle = (event: FormEvent) => {
     event.preventDefault(); clearMessage()
     try {
       const next = editingStyleId ? updateStylePreset(config, editingStyleId, styleForm) : addStylePreset(config, styleForm)
-      commit(next); setSelectedStyleId(next.defaultStyleId ?? ''); setStyleForm(emptyStyle); setEditingStyleId(undefined); setStatus('写作风格已保存。')
-    } catch (caught) { setError(caught instanceof Error ? caught.message : '风格保存失败。') }
+      commit(next); setSelectedStyleId(next.defaultStyleId ?? ''); setStyleForm(emptyStyle); setEditingStyleId(undefined); setStatus(tr('写作风格已保存。', 'Writing style saved.'))
+    } catch (caught) { setError(caught instanceof Error ? caught.message : tr('风格保存失败。', 'Writing style could not be saved.')) }
   }
 
   const handleSampleFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -84,45 +139,48 @@ export function AiWorkbench() {
     try {
       const content = await readSampleFile(file)
       setStyleForm((current) => ({ ...current, samples: [...current.samples, { id: `sample-${crypto.randomUUID()}`, name: file.name, content }] }))
-      setStatus(`已读取样本：${file.name}`)
-    } catch { setError('样本文件读取失败。') }
+      setStatus(tr(`已读取样本：${file.name}`, `Sample loaded: ${file.name}`))
+    } catch { setError(tr('样本文件读取失败。', 'Sample file could not be read.')) }
     event.target.value = ''
   }
 
   const testModel = async () => {
     clearMessage()
-    if (!selectedModel) { setError('请先保存并选择一个模型。'); return }
+    if (!selectedModel) { setError(tr('请先保存并选择一个模型。', 'Save and select a model first.')); return }
     try {
       const key = await unlockModelApiKey(selectedModel, passphrase)
       const result = await createLLMClient(selectedModel, key).testConnection()
-      if (result.ok) setStatus(`连接成功，耗时 ${result.latencyMs} ms。`)
+      if (result.ok) setStatus(tr(`连接成功，耗时 ${result.latencyMs} ms。`, `Connection succeeded in ${result.latencyMs} ms.`))
       else setError(result.error.message)
-    } catch (caught) { setError(caught instanceof Error ? caught.message : '连接测试失败。') }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : tr('连接测试失败。', 'Connection test failed.')) }
   }
 
   const generate = async () => {
     clearMessage(); setOutput('')
-    if (!task.trim()) { setError('请输入写作任务。'); return }
-    if (!selectedModel) { setError('请先保存并选择一个模型。'); return }
+    if (!task.trim()) { setError(tr('请输入写作任务。', 'Enter a writing task.')); return }
+    if (!selectedModel) { setError(tr('请先保存并选择一个模型。', 'Save and select a model first.')); return }
     setRunning(true)
     try {
       const key = await unlockModelApiKey(selectedModel, passphrase)
       const client = createLLMClient(selectedModel, key)
-      const request = { task, style: selectedStyle, styleEnabled, humanization: config.humanization }
+      const skills = loadWritingSkills(localStorage).skills.filter((skill) => skill.enabled).map(({ name, content }) => ({ name, content }))
+      const request = { task, style: selectedStyle, styleEnabled: true, humanization: config.humanization, skills }
       if (selectedModel.streaming) {
         let text = ''
         for await (const chunk of client.streamText(request)) { text += chunk; setOutput(text) }
       } else setOutput(await client.generateText(request))
-      setStatus('生成完成。')
-    } catch (caught) { setError(caught instanceof Error ? caught.message : '生成失败。') }
+      setStatus(tr('生成完成。', 'Generation complete.'))
+    } catch (caught) { setError(caught instanceof Error ? caught.message : tr('生成失败。', 'Generation failed.')) }
     finally { setRunning(false) }
   }
 
   const startEditModel = (id: string) => {
     const model = config.models.find((item) => item.id === id)
     if (!model) return
+    const next = modelFormForProfile(model)
     setEditingModelId(id)
-    setModelForm({ name: model.name, provider: model.provider, baseUrl: model.baseUrl, model: model.model, apiKey: '', temperature: model.temperature, maxTokens: model.maxTokens, streaming: model.streaming, imageGeneration: model.imageGeneration, enabled: model.enabled })
+    setSelectedPresetId(next.presetId ?? '')
+    setModelForm(next.form)
   }
 
   const startEditStyle = (id: string) => {
@@ -137,53 +195,79 @@ export function AiWorkbench() {
     try {
       const value = JSON.parse(await file.text())
       const models = Array.isArray(value.models) ? value.models.map((model: Record<string, unknown>) => ({ ...model, encryptedApiKey: undefined })) : value.models
-      if (value.schemaVersion !== 1) throw new Error('不支持的 AI 配置版本。')
+      if (value.schemaVersion !== 1) throw new Error(tr('不支持的 AI 配置版本。', 'Unsupported AI configuration version.'))
       const result = importAiConfig(JSON.stringify({ ...value, models }), config)
       if (result.error) throw new Error(result.error)
-      commit(result.config); setStatus('AI 配置已导入（出于安全原因不包含 API Key）。')
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'AI 配置导入失败。') }
+      commit(result.config); setStatus(tr('AI 配置已导入（出于安全原因不包含 API Key）。', 'AI configuration imported (API keys are excluded for safety).'))
+    } catch (caught) { setError(caught instanceof Error ? caught.message : tr('AI 配置导入失败。', 'AI configuration import failed.')) }
     event.target.value = ''
   }
 
   return (
     <section className="ai-workbench" aria-labelledby="ai-heading">
-      <div className="ai-heading"><div><p className="eyebrow">PRIVATE AI DESK</p><h2 id="ai-heading">写作实验室</h2></div><span className="ai-privacy">直连你自己的模型 · 本机加密</span></div>
-      {(status || error || loaded.recovered) && <p className={error ? 'ai-message error' : 'ai-message'} role={error ? 'alert' : 'status'}>{error || status || 'AI 配置损坏，已恢复空配置。'}</p>}
-      <div className="ai-grid">
-        <section className="ai-panel model-panel" aria-labelledby="models-heading">
-          <div className="panel-title"><h3 id="models-heading">模型与连接</h3><span>{config.models.length} 个模型</span></div>
-          <p className="panel-help">API Key 只在保存时用本机口令加密；导出文件不会包含密钥。请求由浏览器直接发往你填写的地址。</p>
-          <label className="ai-field">本机解锁口令<input type="password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder="只在当前页面内存中使用" autoComplete="new-password" /></label>
+      <div className="ai-heading"><h2 id="ai-heading">{workspace === 'writing' ? tr('AI 写作', 'AI writing') : tr('封面生成', 'Cover generator')}</h2><div className="ai-heading-actions">{workspace === 'cover' && <button type="button" onClick={() => setWorkspace('writing')}>{tr('回到写作', 'Back to writing')}</button>}{workspace === 'writing' && <button type="button" onClick={() => setActiveDialog('model')}>{tr('模型设置', 'Model settings')}</button>}</div></div>
+      {workspace === 'cover' ? <CoverWorkbench language={language} /> : <>
+      {(status || error || loaded.recovered) && <p className={error ? 'ai-message error' : 'ai-message'} role={error ? 'alert' : 'status'}>{error || status || tr('AI 配置损坏，已恢复空配置。', 'AI configuration was damaged; an empty configuration was restored.')}</p>}
+      {activeDialog && <div className="ai-settings-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActiveDialog(null) }}>
+        <FloatingPanel
+          className="ai-settings-dialog"
+          eyebrow={activeDialog === 'model' ? tr('配置 AI', 'Configure AI') : tr('写作辅助', 'Writing tools')}
+          title={activeDialog === 'model' ? tr('模型与连接', 'Models and connection') : activeDialog === 'style' ? tr('写作风格与去 AI 味', 'Writing style and humanization') : tr('写作 Skill', 'Writing Skill')}
+          closeLabel={activeDialog === 'model' ? tr('关闭模型设置', 'Close model settings') : activeDialog === 'style' ? tr('关闭风格设置', 'Close style settings') : tr('关闭 Skill 设置', 'Close Skill settings')}
+          onClose={() => setActiveDialog(null)}
+          width={Math.min(980, window.innerWidth - 32)}
+          height={Math.min(720, window.innerHeight - 32)}
+          minWidth={360}
+          minHeight={320}
+        >
+          <div className="ai-grid ai-settings-grid">
+        {activeDialog === 'model' && <section className="ai-panel model-panel" aria-labelledby="models-heading">
+          <div className="panel-title"><h3 id="models-heading">{tr('模型与连接', 'Models and connection')}</h3><span>{config.models.length} {tr('个模型', 'models')}</span></div>
+          <p className="panel-help">{tr('API Key 只在保存时用本机口令加密；导出文件不会包含密钥。接口地址、模型 ID 和默认参数由模型预设自动带入。', 'The API key is encrypted with your local passphrase; exports never contain keys. The endpoint, model ID, and defaults come from the selected preset.')}</p>
+          <label className="ai-field">{tr('本机解锁口令', 'Local unlock passphrase')}<input type="password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder={tr('只在当前页面内存中使用', 'Used only in this page memory')} autoComplete="new-password" /></label>
           <form className="ai-form" onSubmit={submitModel}>
-            <label className="ai-field">模型名称<input value={modelForm.name} onChange={(event) => setModelForm({ ...modelForm, name: event.target.value })} placeholder="例如：我的 DeepSeek" /></label>
-            <label className="ai-field">提供商<select value={modelForm.provider} onChange={(event) => setModelForm({ ...modelForm, provider: event.target.value as ProviderKind })}><option value="openai-compatible">OpenAI 兼容</option><option value="dashscope">通义千问 / DashScope</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic Claude</option></select></label>
-            <label className="ai-field">Base URL<input type="url" value={modelForm.baseUrl} onChange={(event) => setModelForm({ ...modelForm, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
-            <label className="ai-field">模型 ID<input value={modelForm.model} onChange={(event) => setModelForm({ ...modelForm, model: event.target.value })} placeholder="deepseek-chat / gpt-4o-mini" /></label>
-            <label className="ai-field">API Key{editingModelId && <small>留空表示保留已有密钥</small>}<input type="password" value={modelForm.apiKey} onChange={(event) => setModelForm({ ...modelForm, apiKey: event.target.value })} placeholder={editingModelId ? '已保存（不回显）' : '粘贴你自己的 Key'} autoComplete="off" /></label>
-            <div className="ai-two-col"><label className="ai-field">Temperature<input type="number" min="0" max="2" step="0.1" value={modelForm.temperature ?? ''} onChange={(event) => setModelForm({ ...modelForm, temperature: event.target.value === '' ? undefined : Number(event.target.value) })} /></label><label className="ai-field">Max tokens<input type="number" min="1" value={modelForm.maxTokens ?? ''} onChange={(event) => setModelForm({ ...modelForm, maxTokens: event.target.value === '' ? undefined : Number(event.target.value) })} /></label></div>
-            <div className="ai-two-col"><label className="check-field"><input type="checkbox" checked={modelForm.streaming} onChange={(event) => setModelForm({ ...modelForm, streaming: event.target.checked })} />启用流式输出</label><label className="check-field"><input type="checkbox" checked={modelForm.imageGeneration} onChange={(event) => setModelForm({ ...modelForm, imageGeneration: event.target.checked })} />支持图片生成</label></div>
-            <div className="ai-actions"><button className="primary-action" type="submit">{editingModelId ? '更新模型' : '保存模型'}</button>{editingModelId && <button type="button" onClick={() => { setEditingModelId(undefined); setModelForm(emptyModel) }}>取消编辑</button>}</div>
+            <label className="ai-field">{tr('模型选择', 'Choose a model')}<select aria-label={tr('模型选择', 'Choose a model')} value={selectedPresetId} onChange={(event) => { if (event.target.value === 'custom') { setSelectedPresetId('custom'); return }; const preset = modelChoices.find((item) => item.id === event.target.value); if (!preset) return; setSelectedPresetId(preset.id); setModelForm({ ...modelInputFromPreset(preset, modelForm.apiKey), enabled: modelForm.enabled ?? true }) }}><option value="" disabled>{tr('请选择模型预设', 'Choose a model preset')}</option>{modelChoices.map((preset) => <option value={preset.id} key={preset.id}>{preset.label}</option>)}<option value="custom">{tr('自定义型号', 'Custom model')}</option></select></label>
+            <div className="ai-preset-summary" aria-label={tr('模型预设参数', 'Preset parameters')}>
+              <div><span>{tr('模型名称', 'Model name')}</span><strong>{modelForm.name}</strong></div>
+              <div><span>{tr('模型供应商', 'Provider')}</span><strong>{PROVIDER_OPTIONS.find((option) => option.id === modelForm.provider)?.label ?? modelForm.provider}</strong></div>
+              <div><span>{tr('接口地址', 'Base URL')}</span><code>{modelForm.baseUrl}</code></div>
+              <div><span>{tr('模型 ID', 'Model ID')}</span><code>{modelForm.model}</code></div>
+              <div><span>{tr('默认温度', 'Default temperature')}</span><strong>{modelForm.temperature ?? '—'}</strong></div>
+              <div><span>{tr('最大输出 Tokens', 'Max output tokens')}</span><strong>{modelForm.maxTokens ?? '—'}</strong></div>
+              <div><span>{tr('输出方式', 'Output')}</span><strong>{modelForm.streaming ? tr('流式输出', 'Streaming') : tr('一次性输出', 'Complete response')}</strong></div>
+            </div>
+            {selectedPresetId === 'custom' && <label className="ai-field">{tr('自定义模型 ID', 'Custom model ID')}<input value={modelForm.model} onChange={(event) => setModelForm({ ...modelForm, model: event.target.value, name: event.target.value || tr('自定义型号', 'Custom model') })} /></label>}
+            <label className="ai-field">API Key{editingModelId && <small>{tr('留空表示保留已有密钥', 'Leave blank to keep the saved key')}</small>}<input type="password" value={modelForm.apiKey} onChange={(event) => setModelForm({ ...modelForm, apiKey: event.target.value })} placeholder={editingModelId ? tr('已保存（不回显）', 'Saved (hidden)') : tr('粘贴你自己的 Key', 'Paste your own key')} autoComplete="off" /></label>
+            <div className="model-refresh-row"><button type="button" onClick={() => void refreshModels()} disabled={refreshingModels || !modelForm.apiKey.trim()}>{refreshingModels ? tr('刷新中…', 'Refreshing…') : tr('从平台刷新型号', 'Refresh models from provider')}</button><small>{modelRefreshStatus || tr('只向当前接口地址发送 API Key，不经过 CreatorDock。', 'The key is sent only to this provider, never to CreatorDock.')}</small></div>
+            <div className="ai-actions"><button className="primary-action" type="submit">{editingModelId ? tr('更新模型', 'Update model') : tr('保存模型', 'Save model')}</button>{editingModelId && <button type="button" onClick={() => { setEditingModelId(undefined); setSelectedPresetId(defaultModelPreset.id); setModelForm(emptyModel) }}>{tr('取消编辑', 'Cancel edit')}</button>}</div>
           </form>
-          <div className="model-list">{config.models.map((model) => <article className={`model-card ${model.id === selectedModel?.id ? 'selected' : ''}`} key={model.id}><button type="button" className="model-select" onClick={() => setSelectedModelId(model.id)}><strong>{model.name}{config.defaultModelId === model.id ? ' · 默认' : ''}</strong><span>{model.provider} · {model.model}</span><small>{model.encryptedApiKey ? 'Key 已加密保存' : '未保存 Key'}</small></button><div className="model-card-actions"><button type="button" onClick={() => commit(setDefaultModel(config, model.id))}>{config.defaultModelId === model.id ? '默认' : '设为默认'}</button><button type="button" onClick={() => startEditModel(model.id)}>编辑</button><button type="button" onClick={() => commit(deleteModelProfile(config, model.id))}>删除</button></div></article>)}</div>
-          <div className="ai-actions"><button type="button" onClick={() => void testModel()} disabled={!selectedModel}>测试当前连接</button><button type="button" onClick={() => downloadAiConfig(config)}>导出 AI 配置</button><button type="button" onClick={() => configFileInput.current?.click()}>导入 AI 配置</button><input ref={configFileInput} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void importConfigFile(event)} /></div>
-        </section>
+          <div className="model-list">{config.models.map((model) => <article className={`model-card ${model.id === selectedModel?.id ? 'selected' : ''}`} key={model.id}><button type="button" className="model-select" onClick={() => setSelectedModelId(model.id)}><strong>{findModelPreset(model)?.label ?? model.name}{config.defaultModelId === model.id ? ` · ${tr('默认', 'default')}` : ''}</strong><span>{PROVIDER_OPTIONS.find((option) => option.id === model.provider)?.label ?? model.provider} · {model.model}</span><small>{model.encryptedApiKey ? tr('Key 已加密保存', 'Key encrypted') : tr('未保存 Key', 'Key not saved')}</small></button><div className="model-card-actions"><button type="button" onClick={() => commit(setDefaultModel(config, model.id))}>{config.defaultModelId === model.id ? tr('默认', 'Default') : tr('设为默认', 'Set default')}</button><button type="button" onClick={() => startEditModel(model.id)}>{tr('编辑', 'Edit')}</button><button type="button" onClick={() => commit(deleteModelProfile(config, model.id))}>{tr('删除', 'Delete')}</button></div></article>)}</div>
+          <div className="ai-actions"><button type="button" onClick={() => void testModel()} disabled={!selectedModel}>{tr('测试当前连接', 'Test connection')}</button><button type="button" onClick={() => downloadAiConfig(config)}>{tr('导出 AI 配置', 'Export AI config')}</button><button type="button" onClick={() => configFileInput.current?.click()}>{tr('导入 AI 配置', 'Import AI config')}</button><input ref={configFileInput} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void importConfigFile(event)} /></div>
+        </section>}
 
-        <section className="ai-panel style-panel" aria-labelledby="style-heading">
-          <div className="panel-title"><h3 id="style-heading">写作风格与去 AI 味</h3><span>{selectedStyle ? `当前：${selectedStyle.name}` : '尚未设置风格'}</span></div>
-          <form className="ai-form" onSubmit={submitStyle}><label className="ai-field">风格名称<input value={styleForm.name} onChange={(event) => setStyleForm({ ...styleForm, name: event.target.value })} placeholder="例如：我的公众号口吻" /></label><label className="ai-field">风格描述<textarea value={styleForm.description} onChange={(event) => setStyleForm({ ...styleForm, description: event.target.value })} placeholder="描述语气、节奏、常用表达和读者感受" /></label><label className="ai-field">样本内容<textarea value={styleForm.samples[0]?.content ?? ''} onChange={(event) => setStyleForm({ ...styleForm, samples: [{ id: styleForm.samples[0]?.id ?? `sample-${Date.now()}`, name: styleForm.samples[0]?.name ?? '手动样本', content: event.target.value }] })} placeholder="粘贴一段你自己的文章；只作为风格参考，不会被当作指令" /></label><SampleList samples={styleForm.samples} onChange={(samples) => setStyleForm({ ...styleForm, samples })} /><label className="check-field"><input type="checkbox" checked={styleForm.isDefault} onChange={(event) => setStyleForm({ ...styleForm, isDefault: event.target.checked })} />设为默认风格</label><div className="ai-actions"><button type="button" onClick={() => sampleFileInput.current?.click()}>导入 .txt / .md 样本</button><button className="primary-action" type="submit">{editingStyleId ? '更新风格' : '保存风格'}</button>{editingStyleId && <button type="button" onClick={() => { setEditingStyleId(undefined); setStyleForm(emptyStyle) }}>取消编辑</button>}</div></form>
-          <div className="style-list">{config.styles.map((style) => <article className={`style-card ${style.id === selectedStyle?.id ? 'selected' : ''}`} key={style.id}><button type="button" className="model-select" onClick={() => setSelectedStyleId(style.id)}><strong>{style.name}{style.isDefault ? ' · 默认' : ''}</strong><span>{style.description || '未填写描述'}</span><small>{style.samples.length} 个样本</small></button><div className="model-card-actions"><button type="button" onClick={() => startEditStyle(style.id)}>编辑</button><button type="button" onClick={() => commit(deleteStylePreset(config, style.id))}>删除</button></div></article>)}</div>
-          <div className="humanization-box"><label className="check-field"><input type="checkbox" checked={config.humanization.enabled} onChange={(event) => commit(updateHumanizationRules(config, { enabled: event.target.checked }))} />启用去 AI 味规则</label><label className="ai-field">内置规则（可编辑）<textarea value={config.humanization.rules} onChange={(event) => commit(updateHumanizationRules(config, { rules: event.target.value }))} /></label><div className="ai-two-col"><label className="ai-field">禁用词（每行一个）<textarea value={config.humanization.forbiddenWords.join('\n')} onChange={(event) => commit(updateHumanizationRules(config, { forbiddenWords: event.target.value.split(/\n/).map((item) => item.trim()).filter(Boolean) }))} /></label><label className="ai-field">必须习惯（每行一个）<textarea value={config.humanization.requiredHabits.join('\n')} onChange={(event) => commit(updateHumanizationRules(config, { requiredHabits: event.target.value.split(/\n/).map((item) => item.trim()).filter(Boolean) }))} /></label></div></div>
-        </section>
+        {activeDialog === 'style' && <section className="ai-panel style-panel" aria-labelledby="style-heading">
+          <div className="panel-title"><h3 id="style-heading">{tr('写作风格与去 AI 味', 'Writing style and humanization')}</h3><span>{selectedStyle ? `${tr('当前', 'Current')}: ${selectedStyle.name}` : tr('尚未设置风格', 'No style selected')}</span></div>
+          <form className="ai-form" onSubmit={submitStyle}><label className="ai-field">{tr('风格名称', 'Style name')}<input value={styleForm.name} onChange={(event) => setStyleForm({ ...styleForm, name: event.target.value })} placeholder={tr('例如：我的公众号口吻', 'e.g. My newsletter voice')} /></label><label className="ai-field">{tr('风格描述', 'Style description')}<textarea value={styleForm.description} onChange={(event) => setStyleForm({ ...styleForm, description: event.target.value })} placeholder={tr('描述语气、节奏、常用表达和读者感受', 'Describe tone, rhythm, expressions, and reader feeling')} /></label><label className="ai-field">{tr('样本内容', 'Sample content')}<textarea value={styleForm.samples[0]?.content ?? ''} onChange={(event) => setStyleForm({ ...styleForm, samples: [{ id: styleForm.samples[0]?.id ?? `sample-${Date.now()}`, name: styleForm.samples[0]?.name ?? '手动样本', content: event.target.value }] })} placeholder={tr('粘贴一段你自己的文章；只作为风格参考，不会被当作指令', 'Paste your own writing as style reference, not instructions')} /></label><SampleList samples={styleForm.samples} onChange={(samples) => setStyleForm({ ...styleForm, samples })} language={language} /><label className="check-field"><input type="checkbox" checked={styleForm.isDefault} onChange={(event) => setStyleForm({ ...styleForm, isDefault: event.target.checked })} />{tr('设为默认风格', 'Set as default style')}</label><div className="ai-actions"><button type="button" onClick={() => sampleFileInput.current?.click()}>{tr('导入 .txt / .md 样本', 'Import .txt / .md samples')}</button><button className="primary-action" type="submit">{editingStyleId ? tr('更新风格', 'Update style') : tr('保存风格', 'Save style')}</button>{editingStyleId && <button type="button" onClick={() => { setEditingStyleId(undefined); setStyleForm(emptyStyle) }}>{tr('取消编辑', 'Cancel edit')}</button>}</div></form>
+          <div className="style-list">{config.styles.map((style) => <article className={`style-card ${style.id === selectedStyle?.id ? 'selected' : ''}`} key={style.id}><button type="button" className="model-select" onClick={() => setSelectedStyleId(style.id)}><strong>{style.name}{style.isDefault ? ` · ${tr('默认', 'default')}` : ''}</strong><span>{style.description || tr('未填写描述', 'No description')}</span><small>{style.samples.length} {tr('个样本', 'samples')}</small></button><div className="model-card-actions"><button type="button" onClick={() => startEditStyle(style.id)}>{tr('编辑', 'Edit')}</button><button type="button" onClick={() => commit(deleteStylePreset(config, style.id))}>{tr('删除', 'Delete')}</button></div></article>)}</div>
+          <div className="humanization-box"><label className="check-field"><input type="checkbox" checked={config.humanization.enabled} onChange={(event) => commit(updateHumanizationRules(config, { enabled: event.target.checked }))} />{tr('启用去 AI 味规则', 'Enable humanization rules')}</label><label className="ai-field">{tr('内置规则（可编辑）', 'Built-in rules (editable)')}<textarea value={config.humanization.rules} onChange={(event) => commit(updateHumanizationRules(config, { rules: event.target.value }))} /></label><div className="ai-two-col"><label className="ai-field">{tr('禁用词（每行一个）', 'Forbidden words (one per line)')}<textarea value={config.humanization.forbiddenWords.join('\n')} onChange={(event) => commit(updateHumanizationRules(config, { forbiddenWords: event.target.value.split(/\n/).map((item) => item.trim()).filter(Boolean) }))} /></label><label className="ai-field">{tr('必须习惯（每行一个）', 'Required habits (one per line)')}<textarea value={config.humanization.requiredHabits.join('\n')} onChange={(event) => commit(updateHumanizationRules(config, { requiredHabits: event.target.value.split(/\n/).map((item) => item.trim()).filter(Boolean) }))} /></label></div></div>
+        </section>}
 
-        <section className="ai-panel generation-panel" aria-labelledby="generation-heading"><div className="panel-title"><h3 id="generation-heading">开始写作</h3><span>每次请求都会带上统一提示词</span></div><div className="ai-two-col"><label className="ai-field">使用模型<select value={selectedModel?.id ?? ''} onChange={(event) => setSelectedModelId(event.target.value)}><option value="">请选择模型</option>{config.models.filter((model) => model.enabled).map((model) => <option value={model.id} key={model.id}>{model.name}</option>)}</select></label><label className="ai-field">使用风格<select value={selectedStyle?.id ?? ''} onChange={(event) => setSelectedStyleId(event.target.value)}><option value="">不使用风格</option>{config.styles.map((style) => <option value={style.id} key={style.id}>{style.name}</option>)}</select></label></div><label className="check-field"><input type="checkbox" checked={styleEnabled} onChange={(event) => setStyleEnabled(event.target.checked)} />本次使用写作风格和去 AI 味规则</label><label className="ai-field">写作任务<textarea className="task-input" value={task} onChange={(event) => setTask(event.target.value)} placeholder="例如：把下面这段素材改成一篇有具体细节、自然口语的公众号开头……" /></label><button className="primary-action generate-button" type="button" onClick={() => void generate()} disabled={running}>{running ? '生成中…' : '生成内容'}</button>{output && <div className="generation-output" aria-label="生成结果"><div className="output-title">生成结果</div><pre>{output}</pre></div>}</section>
+          </div>
+          {activeDialog === 'skill' && <SkillManager language={language} />}
+        </FloatingPanel>
+      </div>}
+      <div className="ai-grid ai-main-grid">
+        <section className="ai-panel generation-panel" aria-label={tr('写作任务区', 'Writing task area')}><p className="panel-help generation-helper">{tr('使用你自己的模型，帮你高效完成草稿撰写、改写和润色等任务。', 'Use your own model to draft, rewrite, and polish your content.')}</p><label className="ai-field">{tr('写作任务', 'Writing task')}<textarea className="task-input" value={task} onChange={(event) => setTask(event.target.value)} placeholder={tr('例如：把下面这段素材改成一篇自然口语的公众号开头……', 'e.g. Turn the material below into a natural, conversational newsletter opening…')} /></label><button className="primary-action generate-button" type="button" onClick={() => void generate()} disabled={running}>{running ? tr('生成中…', 'Generating…') : tr('生成内容', 'Generate')}</button>{output && <div className="generation-output" aria-label={tr('生成结果', 'Generated result')}><div className="output-title">{tr('生成结果', 'Generated result')}</div><pre>{output}</pre></div>}<div className="ai-feature-actions"><button type="button" onClick={() => setActiveDialog('style')}>{tr('写作风格与去 AI 味', 'Writing style and humanization')}</button><button type="button" onClick={() => setActiveDialog('skill')}>{tr('写作 Skill', 'Writing Skill')}</button><button type="button" onClick={() => setWorkspace('cover')}>{tr('封面生成', 'Cover generation')}</button></div></section>
       </div>
       <input ref={sampleFileInput} className="sr-only" type="file" accept=".txt,.md,text/plain,text/markdown" onChange={(event) => void handleSampleFile(event)} />
+      </>}
     </section>
   )
 }
 
-function SampleList({ samples, onChange }: { samples: StyleSample[], onChange: (samples: StyleSample[]) => void }) {
-  return <div className="sample-list" aria-label="风格样本列表">{samples.length === 0 && <p className="panel-help sample-empty">还没有风格样本；可以继续粘贴，或导入多个 .txt/.md 文件。</p>}{samples.map((sample, index) => <div className="sample-row" key={sample.id}><label className="ai-field">样本 {index + 1} 名称<input value={sample.name} onChange={(event) => onChange(samples.map((item) => item.id === sample.id ? { ...item, name: event.target.value } : item))} /></label><label className="ai-field">样本内容<textarea value={sample.content} onChange={(event) => onChange(samples.map((item) => item.id === sample.id ? { ...item, content: event.target.value } : item))} /></label><span className="sample-size">{sample.content.length.toLocaleString()} 字符</span><button type="button" aria-label={`删除样本 ${sample.name || index + 1}`} onClick={() => onChange(samples.filter((item) => item.id !== sample.id))}>删除</button></div>)}<button type="button" onClick={() => onChange([...samples, { id: `sample-${Date.now()}`, name: `手动样本 ${samples.length + 1}`, content: '' }])}>新增样本</button></div>
+function SampleList({ samples, onChange, language }: { samples: StyleSample[], onChange: (samples: StyleSample[]) => void, language: LanguageSetting }) {
+  const tr = (zh: string, en: string): string => language === 'en' ? en : zh
+  return <div className="sample-list" aria-label={tr('风格样本列表', 'Writing samples')}>{samples.length === 0 && <p className="panel-help sample-empty">{tr('还没有风格样本；可以继续粘贴，或导入多个 .txt/.md 文件。', 'No writing samples yet; paste text or import multiple .txt/.md files.')}</p>}{samples.map((sample, index) => <div className="sample-row" key={sample.id}><label className="ai-field">{tr(`样本 ${index + 1} 名称`, `Sample ${index + 1} name`)}<input value={sample.name} onChange={(event) => onChange(samples.map((item) => item.id === sample.id ? { ...item, name: event.target.value } : item))} /></label><label className="ai-field">{tr('样本内容', 'Sample content')}<textarea value={sample.content} onChange={(event) => onChange(samples.map((item) => item.id === sample.id ? { ...item, content: event.target.value } : item))} /></label><span className="sample-size">{sample.content.length.toLocaleString()} {tr('字符', 'chars')}</span><button type="button" aria-label={tr(`删除样本 ${sample.name || index + 1}`, `Delete sample ${sample.name || index + 1}`)} onClick={() => onChange(samples.filter((item) => item.id !== sample.id))}>{tr('删除', 'Delete')}</button></div>)}<button type="button" onClick={() => onChange([...samples, { id: `sample-${Date.now()}`, name: `${tr('手动样本', 'Manual sample')} ${samples.length + 1}`, content: '' }])}>{tr('新增样本', 'Add sample')}</button></div>
 }
 
 function readSampleFile(file: File): Promise<string> {

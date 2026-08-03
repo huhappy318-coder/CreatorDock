@@ -14,17 +14,17 @@ const entry = (overrides: Partial<LaunchEntry> = {}): LaunchEntry => ({
   id: 'entry-1',
   displayName: 'Studio account',
   destinationUrl: 'https://example.com/studio',
-  group: 'Work',
   browserTarget: 'default',
   createShortcut: false,
   ...overrides,
 })
 
 const config = (entries: LaunchEntry[], overrides: Partial<CreatorDockConfig> = {}): CreatorDockConfig => ({
-  schemaVersion: 1,
+  schemaVersion: 2,
   entries,
   theme: 'system',
   density: 'comfortable',
+  language: 'en',
   ...overrides,
 })
 
@@ -39,7 +39,7 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-describe('catalog navigation and discovery', () => {
+describe('catalog discovery', () => {
   it('keeps duplicate-platform accounts distinct and searches by platform name', () => {
     seed(config([
       entry({ id: 'work', displayName: 'Work account', platformPresetId: 'wechat-official-accounts', destinationUrl: 'https://mp.weixin.qq.com/' }),
@@ -55,29 +55,25 @@ describe('catalog navigation and discovery', () => {
     expect(screen.getByRole('link', { name: /Personal account/ })).toBeInTheDocument()
   })
 
-  it('filters the workbench with visible category navigation and clears the filter', () => {
+  it('keeps the entry list flat and uses search for discovery', () => {
     seed(config([
-      entry({ id: 'video', displayName: 'Video room', group: 'Video' }),
-      entry({ id: 'writing', displayName: 'Writing desk', group: 'Writing', destinationUrl: 'https://example.com/writing' }),
+      entry({ id: 'video', displayName: 'Video room' }),
+      entry({ id: 'writing', displayName: 'Writing desk', destinationUrl: 'https://example.com/writing' }),
     ]))
     render(<App />)
 
-    const navigation = screen.getByRole('navigation', { name: 'Categories' })
-    fireEvent.click(within(navigation).getByRole('button', { name: 'Video' }))
-    expect(screen.getByRole('link', { name: /Video room/ })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Writing desk/ })).not.toBeInTheDocument()
-
-    fireEvent.click(within(navigation).getByRole('button', { name: 'All destinations' }))
+    expect(screen.queryByRole('navigation', { name: 'Categories' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search destinations' }), { target: { value: 'Writing desk' } })
     expect(screen.getByRole('link', { name: /Writing desk/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Video room/ })).not.toBeInTheDocument()
   })
 
-  it('uses isolated external links and keeps preset uncertainty notes visible', () => {
+  it('uses isolated external links while keeping the card surface minimal', () => {
     const unverified = platformPresets.find((preset) => preset.verification === 'unverified')!
     seed(config([
       entry({
         displayName: 'Publishing account',
         destinationUrl: unverified.url,
-        group: unverified.category,
         platformPresetId: unverified.id,
       }),
     ]))
@@ -86,11 +82,47 @@ describe('catalog navigation and discovery', () => {
     const link = screen.getByRole('link', { name: /Publishing account/ })
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
-    expect(link).toHaveTextContent(unverified.verificationNote!)
+    expect(link).not.toHaveTextContent(unverified.verificationNote!)
+    expect(link.querySelector('img')).toHaveAttribute('src', unverified.iconSrc)
   })
 })
 
 describe('destination lifecycle', () => {
+  it('searches platform aliases and keeps category and profile fields out of the simple form', () => {
+    seed(config([]))
+    render(<App />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add destination' })[0])
+    const dialog = screen.getByRole('dialog', { name: 'Add destination' })
+    expect(within(dialog).queryByLabelText('Category')).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText('Profile directory')).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText('Browser for desktop shortcut')).not.toBeInTheDocument()
+
+    const platformSearch = within(dialog).getByRole('combobox', { name: 'Platform' })
+    fireEvent.change(platformSearch, { target: { value: '油管' } })
+    const listbox = within(dialog).getByRole('listbox', { name: 'Platform results' })
+    fireEvent.click(within(listbox).getByRole('option', { name: 'YouTube Studio' }))
+    expect(within(dialog).getByLabelText('Destination URL')).toHaveValue('https://studio.youtube.com/')
+
+    fireEvent.click(within(dialog).getByLabelText('Include in shortcut export'))
+    expect(within(dialog).getByLabelText('Browser for desktop shortcut')).toBeInTheDocument()
+  })
+
+  it('preserves a hidden legacy browser profile while editing ordinary fields', () => {
+    seed(config([entry({ browserTarget: 'chrome', profileDirectoryName: 'Profile 2', createShortcut: true })]))
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Studio account' }))
+    const dialog = screen.getByRole('dialog', { name: 'Edit destination' })
+    expect(within(dialog).queryByLabelText('Profile directory')).not.toBeInTheDocument()
+    fireEvent.change(within(dialog).getByLabelText('Account label'), { target: { value: 'Renamed account' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save destination' }))
+
+    expect(JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY)!)).toMatchObject({
+      entries: [{ displayName: 'Renamed account', profileDirectoryName: 'Profile 2' }],
+    })
+  })
+
   it('adds, edits, and confirms deletion without confusing shortcut settings with web links', async () => {
     seed(config([]))
     render(<App />)
@@ -100,16 +132,16 @@ describe('destination lifecycle', () => {
     const dialog = screen.getByRole('dialog', { name: 'Add destination' })
     expect(within(dialog).getByLabelText('Account label')).toHaveFocus()
 
-    fireEvent.change(within(dialog).getByLabelText('Platform'), { target: { value: 'xiaohongshu' } })
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Platform' }), { target: { value: 'Xiaohongshu' } })
+    fireEvent.click(within(within(dialog).getByRole('listbox', { name: 'Platform results' })).getByRole('option', { name: 'Xiaohongshu' }))
     fireEvent.change(within(dialog).getByLabelText('Account label'), { target: { value: 'Client A' } })
-    fireEvent.change(within(dialog).getByLabelText('Browser for desktop shortcut'), { target: { value: 'chrome' } })
-    fireEvent.change(within(dialog).getByLabelText('Profile directory'), { target: { value: 'Profile 2' } })
     fireEvent.click(within(dialog).getByLabelText('Include in shortcut export'))
+    fireEvent.change(within(dialog).getByLabelText('Browser for desktop shortcut'), { target: { value: 'chrome' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save destination' }))
 
     const link = screen.getByRole('link', { name: /Client A/ })
     expect(link).toHaveAttribute('href', 'https://creator.xiaohongshu.com/')
-    expect(screen.getByText(/Chrome · Profile 2 · Desktop shortcuts only/i)).toBeInTheDocument()
+    expect(link).not.toHaveTextContent(/Chrome · Desktop shortcuts only/i)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Client A' }))
     const editDialog = screen.getByRole('dialog', { name: 'Edit destination' })
@@ -156,7 +188,6 @@ describe('destination lifecycle', () => {
 
     fireEvent.change(within(dialog).getByLabelText('Account label'), { target: { value: 'Unsafe' } })
     fireEvent.change(within(dialog).getByLabelText('Destination URL'), { target: { value: 'file:///unsafe' } })
-    fireEvent.change(within(dialog).getByLabelText('Category'), { target: { value: 'Work' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save destination' }))
 
     expect(within(dialog).getByRole('alert')).toHaveTextContent('HTTP(S)')
@@ -219,14 +250,14 @@ describe('reordering', () => {
 
   it('moves relative to adjacent visible cards and disables controls at filtered boundaries', () => {
     seed(config([
-      entry({ id: 'hidden-before', displayName: 'Hidden before', group: 'Other' }),
-      entry({ id: 'a', displayName: 'A work', group: 'Work', destinationUrl: 'https://example.com/a' }),
-      entry({ id: 'c', displayName: 'C work', group: 'Work', destinationUrl: 'https://example.com/c' }),
-      entry({ id: 'hidden-after', displayName: 'Hidden after', group: 'Other', destinationUrl: 'https://example.com/after' }),
+      entry({ id: 'hidden-before', displayName: 'Hidden before' }),
+      entry({ id: 'a', displayName: 'A work', destinationUrl: 'https://example.com/a' }),
+      entry({ id: 'c', displayName: 'C work', destinationUrl: 'https://example.com/c' }),
+      entry({ id: 'hidden-after', displayName: 'Hidden after', destinationUrl: 'https://example.com/after' }),
     ]))
     render(<App />)
 
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Categories' })).getByRole('button', { name: 'Work' }))
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search destinations' }), { target: { value: 'work' } })
     expect(screen.getByRole('button', { name: 'Move A work earlier' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Move C work later' })).toBeDisabled()
 
@@ -242,6 +273,19 @@ describe('reordering', () => {
 })
 
 describe('preferences, backup, and recovery', () => {
+  it('defaults to Chinese and switches the workbench to English', () => {
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: '创作者工作台' })).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('zh-CN')
+    fireEvent.change(screen.getByLabelText('界面语言'), { target: { value: 'en' } })
+    expect(screen.getByRole('heading', { name: 'Creator workspace' })).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('en')
+    expect(JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY)!)).toMatchObject({ language: 'en' })
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'zh-CN' } })
+    expect(screen.getByRole('heading', { name: '创作者工作台' })).toBeInTheDocument()
+  })
+
   it('persists theme and density choices on the workbench root', () => {
     seed(config([entry()]))
     const { container } = render(<App />)
@@ -338,7 +382,7 @@ describe('preferences, backup, and recovery', () => {
     const resetButton = screen.getByRole('button', { name: 'Reset workbench' })
     fireEvent.click(resetButton)
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Reset to defaults' }))
-    expect(screen.getByRole('link', { name: /Xiaohongshu/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /小红书/ })).toBeInTheDocument()
     expect(resetButton).toHaveFocus()
   })
 
@@ -346,10 +390,10 @@ describe('preferences, backup, and recovery', () => {
     localStorage.setItem(CONFIG_STORAGE_KEY, '{bad json')
     render(<App />)
 
-    expect(screen.getByRole('status')).toHaveTextContent('Recovered default configuration because saved data was corrupt.')
+    expect(screen.getByRole('status')).toHaveTextContent('已保存的数据损坏，已恢复默认配置。')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'nothing-can-match-this' } })
-    expect(screen.getByRole('heading', { name: 'No destinations found' })).toBeInTheDocument()
-    await waitFor(() => expect(screen.queryByRole('link', { name: /Xiaohongshu/ })).not.toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: '没有找到入口' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('link', { name: /小红书/ })).not.toBeInTheDocument())
   })
 })
 

@@ -1,19 +1,21 @@
 import { platformPresets, type PlatformPreset } from './catalog'
+import { DEFAULT_LANGUAGE, platformLabel, platformSearchLabels, type LanguageSetting } from './i18n'
 
 export type { PlatformPreset } from './catalog'
 
-export const CONFIG_SCHEMA_VERSION = 1 as const
+export const CONFIG_SCHEMA_VERSION = 2 as const
+export const SHORTCUT_SCHEMA_VERSION = 1 as const
 export const CONFIG_STORAGE_KEY = 'creatordock.config'
 
 export type BrowserTarget = 'default' | 'chrome' | 'edge'
 export type ThemeSetting = 'light' | 'dark' | 'system'
 export type DensitySetting = 'comfortable' | 'compact'
+export type { LanguageSetting } from './i18n'
 
 export interface LaunchEntry {
   id: string
   displayName: string
   destinationUrl: string
-  group: string
   browserTarget: BrowserTarget
   profileDirectoryName?: string
   createShortcut: boolean
@@ -25,10 +27,11 @@ export interface CreatorDockConfig {
   entries: LaunchEntry[]
   theme: ThemeSetting
   density: DensitySetting
+  language: LanguageSetting
 }
 
 export interface ShortcutExport {
-  schemaVersion: typeof CONFIG_SCHEMA_VERSION
+  schemaVersion: typeof SHORTCUT_SCHEMA_VERSION
   shortcuts: Array<Pick<LaunchEntry, 'displayName' | 'destinationUrl' | 'browserTarget' | 'profileDirectoryName' | 'createShortcut'>>
 }
 
@@ -40,7 +43,6 @@ export interface StorageAdapter {
 export interface NewLaunchEntry {
   displayName: string
   destinationUrl: string
-  group: string
   browserTarget?: BrowserTarget
   profileDirectoryName?: string
   createShortcut?: boolean
@@ -63,19 +65,38 @@ export function isHttpUrl(value: string): boolean {
 }
 
 export function createDefaultConfig(idFactory: IdFactory = createId): CreatorDockConfig {
+  const preset = (id: PlatformPreset['id']): PlatformPreset => {
+    const found = platformPresets.find((candidate) => candidate.id === id)
+    if (!found) throw new Error(`Default platform preset "${id}" is missing.`)
+    return found
+  }
+  const makeEntry = (platformPresetId: string, displayName?: string, shortcut?: Pick<LaunchEntry, 'browserTarget' | 'profileDirectoryName' | 'createShortcut'>): LaunchEntry => {
+    const platform = preset(platformPresetId)
+    return {
+      id: idFactory(),
+      displayName: displayName ?? platformLabel(platform.id, DEFAULT_LANGUAGE, platform.name),
+      destinationUrl: platform.url,
+      browserTarget: shortcut?.browserTarget ?? 'default',
+      ...(shortcut?.profileDirectoryName ? { profileDirectoryName: shortcut.profileDirectoryName } : {}),
+      createShortcut: shortcut?.createShortcut ?? false,
+      platformPresetId: platform.id,
+    }
+  }
+
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
-    entries: platformPresets.map((preset) => ({
-      id: idFactory(),
-      displayName: preset.name,
-      destinationUrl: preset.url,
-      group: preset.category,
-      browserTarget: 'default',
-      createShortcut: false,
-      platformPresetId: preset.id,
-    })),
+    entries: [
+      makeEntry('xiaohongshu'),
+      makeEntry('wechat-official-accounts'),
+      makeEntry('bilibili'),
+      makeEntry('douyin'),
+      makeEntry('x-twitter'),
+      makeEntry('wechat-official-accounts', '公众号·账号一', { browserTarget: 'chrome', profileDirectoryName: 'Default', createShortcut: true }),
+      makeEntry('wechat-official-accounts', '公众号·账号二', { browserTarget: 'edge', profileDirectoryName: 'Default', createShortcut: true }),
+    ],
     theme: 'system',
     density: 'comfortable',
+    language: DEFAULT_LANGUAGE,
   }
 }
 
@@ -108,24 +129,17 @@ export function reorderLaunchEntry(config: CreatorDockConfig, id: string, destin
   return { ...config, entries }
 }
 
-export function filterLaunchEntries(entries: readonly LaunchEntry[], query = '', group?: string): LaunchEntry[] {
+export function filterLaunchEntries(entries: readonly LaunchEntry[], query = ''): LaunchEntry[] {
   const normalizedQuery = query.trim().toLocaleLowerCase()
   return entries.filter((entry) =>
-    (!group || entry.group === group)
-    && (!normalizedQuery || [
+    (!normalizedQuery || [
       entry.displayName,
       entry.destinationUrl,
-      entry.group,
       platformPresets.find((preset) => preset.id === entry.platformPresetId)?.name ?? '',
+      ...(platformPresets.find((preset) => preset.id === entry.platformPresetId)?.searchTerms ?? []),
+      ...platformSearchLabels(entry.platformPresetId),
     ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery))),
   )
-}
-
-export function groupLaunchEntries(entries: readonly LaunchEntry[]): Record<string, LaunchEntry[]> {
-  return entries.reduce<Record<string, LaunchEntry[]>>((groups, entry) => {
-    ;(groups[entry.group] ??= []).push(entry)
-    return groups
-  }, {})
 }
 
 export function saveConfig(storage: StorageAdapter, config: CreatorDockConfig, key = CONFIG_STORAGE_KEY): void {
@@ -156,7 +170,7 @@ export function importConfig(json: string, currentConfig: CreatorDockConfig): { 
 export function createShortcutExport(config: CreatorDockConfig): ShortcutExport {
   assertValidConfig(config)
   return {
-    schemaVersion: CONFIG_SCHEMA_VERSION,
+    schemaVersion: SHORTCUT_SCHEMA_VERSION,
     shortcuts: config.entries.map(({ displayName, destinationUrl, browserTarget, profileDirectoryName, createShortcut }) => ({
       displayName,
       destinationUrl,
@@ -169,14 +183,12 @@ export function createShortcutExport(config: CreatorDockConfig): ShortcutExport 
 
 function normalizeNewEntry(entry: NewLaunchEntry): Omit<LaunchEntry, 'id'> {
   if (!entry.displayName.trim()) throw new Error('Display name is required.')
-  if (!entry.group.trim()) throw new Error('Group is required.')
   if (!isHttpUrl(entry.destinationUrl)) throw new Error('Destination URL must use HTTP(S).')
   if (entry.browserTarget !== undefined && !isBrowserTarget(entry.browserTarget)) throw new Error('Browser target is invalid.')
 
   return {
-    displayName: entry.displayName.trim(),
+    displayName: normalizeBuiltInDisplayName(entry.displayName.trim(), entry.platformPresetId),
     destinationUrl: entry.destinationUrl,
-    group: entry.group.trim(),
     browserTarget: entry.browserTarget ?? 'default',
     ...(entry.profileDirectoryName?.trim() ? { profileDirectoryName: entry.profileDirectoryName.trim() } : {}),
     createShortcut: entry.createShortcut ?? false,
@@ -201,7 +213,7 @@ function parseConfig(json: string): { ok: true, config: CreatorDockConfig } | { 
 }
 
 function migrateLegacyEntries(entries: unknown[]): CreatorDockConfig {
-  return validateConfig({ schemaVersion: CONFIG_SCHEMA_VERSION, entries, theme: 'system', density: 'comfortable' })
+  return validateConfig({ schemaVersion: 1, entries, theme: 'system', density: 'comfortable', language: DEFAULT_LANGUAGE })
 }
 
 function assertValidConfig(config: CreatorDockConfig): void {
@@ -210,14 +222,16 @@ function assertValidConfig(config: CreatorDockConfig): void {
 
 function validateConfig(value: unknown): CreatorDockConfig {
   if (!isRecord(value)) throw new Error('Configuration must be an object.')
-  if (value.schemaVersion !== CONFIG_SCHEMA_VERSION) throw new Error(`Unsupported configuration schema version: ${String(value.schemaVersion)}.`)
+  if (value.schemaVersion !== 1 && value.schemaVersion !== CONFIG_SCHEMA_VERSION) throw new Error(`Unsupported configuration schema version: ${String(value.schemaVersion)}.`)
   if (!Array.isArray(value.entries)) throw new Error('Configuration entries must be an array.')
   if (!isThemeSetting(value.theme)) throw new Error('Theme must be light, dark, or system.')
   if (!isDensitySetting(value.density)) throw new Error('Density must be comfortable or compact.')
+  const language = value.language === undefined ? DEFAULT_LANGUAGE : value.language
+  if (!isLanguageSetting(language)) throw new Error('Language must be zh-CN or en.')
 
   const entries = value.entries.map(validateLaunchEntry)
   if (new Set(entries.map((entry) => entry.id)).size !== entries.length) throw new Error('Launch entry identifiers must be unique.')
-  return { schemaVersion: CONFIG_SCHEMA_VERSION, entries, theme: value.theme, density: value.density }
+  return { schemaVersion: CONFIG_SCHEMA_VERSION, entries, theme: value.theme, density: value.density, language }
 }
 
 function validateLaunchEntry(value: unknown): LaunchEntry {
@@ -225,7 +239,6 @@ function validateLaunchEntry(value: unknown): LaunchEntry {
   if (!isNonEmptyString(value.id)) throw new Error('Launch entry identifier is required.')
   if (!isNonEmptyString(value.displayName)) throw new Error('Launch entry display name is required.')
   if (!isNonEmptyString(value.destinationUrl) || !isHttpUrl(value.destinationUrl)) throw new Error('Launch entry destination URL must use HTTP(S).')
-  if (!isNonEmptyString(value.group)) throw new Error('Launch entry group is required.')
   const browserTarget = value.browserTarget ?? 'default'
   if (!isBrowserTarget(browserTarget)) throw new Error('Launch entry browser target is invalid.')
   if (value.profileDirectoryName !== undefined && !isNonEmptyString(value.profileDirectoryName)) throw new Error('Launch entry profile directory name must be a non-empty string.')
@@ -234,14 +247,25 @@ function validateLaunchEntry(value: unknown): LaunchEntry {
 
   return {
     id: value.id,
-    displayName: value.displayName,
+    displayName: normalizeBuiltInDisplayName(value.displayName, value.platformPresetId),
     destinationUrl: value.destinationUrl,
-    group: value.group,
     browserTarget,
     ...(value.profileDirectoryName === undefined ? {} : { profileDirectoryName: value.profileDirectoryName }),
     createShortcut: value.createShortcut ?? false,
     ...(value.platformPresetId === undefined ? {} : { platformPresetId: value.platformPresetId }),
   }
+}
+
+function normalizeBuiltInDisplayName(displayName: string, platformPresetId: unknown): string {
+  if (typeof platformPresetId !== 'string') return displayName
+  const platform = platformPresets.find((candidate) => candidate.id === platformPresetId)
+  if (!platform) return displayName
+  const knownLabels = new Set([
+    platform.name,
+    platformLabel(platform.id, 'en', platform.name),
+    ...platformSearchLabels(platform.id),
+  ])
+  return knownLabels.has(displayName) ? platformLabel(platform.id, DEFAULT_LANGUAGE, platform.name) : displayName
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -262,4 +286,8 @@ function isThemeSetting(value: unknown): value is ThemeSetting {
 
 function isDensitySetting(value: unknown): value is DensitySetting {
   return value === 'comfortable' || value === 'compact'
+}
+
+function isLanguageSetting(value: unknown): value is LanguageSetting {
+  return value === 'zh-CN' || value === 'en'
 }

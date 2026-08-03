@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "check:dist": "node scripts/check-dist.mjs",
+    "icons:slice": "python scripts/slice-icons.py",
+    "test:icons": "python scripts/slice-icons.py --check",
     "preview": "vite preview",
     "test": "vitest run --config vitest.config.ts",
     "test:e2e": "node scripts/preview-smoke.mjs",
@@ -14,9 +16,15 @@
     "test:launcher": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Start-CreatorDock.ps1",
     "test:shortcuts": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-CreatorDockShortcuts.ps1",
     "typecheck": "tsc -b --pretty false",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:info": "tauri info",
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-store": "^2.4.4",
     "@vite-pwa/assets-generator": "^1.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -24,6 +32,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",
+    "@tauri-apps/cli": "^2.11.4",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^22.10.5",

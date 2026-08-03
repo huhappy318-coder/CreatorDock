@@ -20,12 +20,12 @@ npm ci
 npm run dev
 ```
 
-打开 Vite 输出的本地地址。正式交接截图建议使用 1440×900 桌面视口，并至少展示：
+打开 Vite 输出的本地地址。桌面版首次启动按当前显示器工作区的 50% 居中显示，宽高限制在 820–1000 × 560–720；不会自动最大化。标题栏保留系统最大化能力，应用内可切换“左侧悬浮 / 恢复普通窗口”并恢复默认小窗。正式交接截图建议展示左右两栏工作台，并至少包含：
 
-- 首页全貌和分类侧栏；
+- 首页左右两栏和入口搜索；
 - 同一平台的两个不同账号卡片；
 - 搜索或紧凑密度状态；
-- “添加目标”对话框。
+- “添加入口”对话框。
 
 截图可放在 `docs/images/`，文件名建议为 `creatordock-overview.png`；提交前检查截图中没有私人账号名、浏览器资料、Cookie、Token 或其他敏感信息。
 
@@ -67,19 +67,62 @@ npm run test:e2e
 
 PWA 只缓存 CreatorDock 应用壳；外部创作平台不会被离线缓存。
 
+### Windows 与 macOS 桌面安装
+
+GitHub Releases 会按操作系统提供安装包：
+
+- Windows 下载 NSIS `.exe`。安装结束后会自动在当前用户桌面创建 `CreatorDock.lnk`；如果同名文件属于其他程序，安装器会使用带后缀的名称。
+- macOS 下载通用架构 `.dmg`，将 CreatorDock 拖入“应用程序”。首次打开后可以在“偏好设置”中创建或移除桌面别名。
+- v1 未签名，Windows SmartScreen 或 macOS Gatekeeper 可能显示安全提示；这是发行边界，不要下载来路不明的替代文件。
+
+本地构建桌面壳需要 Rust、Windows MSVC Build Tools（Windows）或 Xcode Command Line Tools（macOS）：
+
+```powershell
+npm run tauri:info
+npm run tauri:dev
+npm run tauri:build
+```
+
+浏览器版和桌面版使用同一份版本化 JSON。桌面应用不会自动读取浏览器 `localStorage`，请在浏览器导出并在桌面版导入；导出文件不包含登录凭据、Cookie、Token 或 API Key。
+
+### 平台图标素材
+
+`public/icons/creator-dock-sprite.png` 是一张带文字标签的 4×4 素材图，包含 CreatorDock、首批平台、AI Writing 和 Custom Site。切片脚本会规整到 2048×2048，保留 16 个切片，并为扩展平台生成 21 个同风格品牌色抽象图标，最终验证 37 张 512×512 PNG：
+
+```powershell
+npm run icons:slice
+npm run test:icons
+```
+
+卡片同时显示图标和平台名称，避免只依赖抽象符号辨认。
+
 ### 配置备份、导入与隐私边界
 
-“Export configuration”导出完整配置，包括账号标签、URL、分组、顺序、主题、密度、浏览器选择、profile directory 名称和快捷方式开关。“Export shortcut file”只导出 Windows helper 所需字段。导入只接受符合当前 schema 的 JSON；无效导入不会覆盖当前有效配置。
+设置区默认使用中文，也可以切换到 English；语言选择会和主题、密度一起保存。“Export configuration”导出 schema v2 完整配置，包括界面语言、账号标签、URL、顺序、主题、密度、浏览器选择、兼容旧快捷方式的 profile directory 名称和快捷方式开关，但不再包含分类。“Export shortcut file”仍使用 Windows helper 兼容格式。导入 v1 时会删除旧分类并保留账号、URL、浏览器、Profile 和快捷方式设置；无效导入不会覆盖当前有效配置。
+
+首次打开只展示小红书、微信公众号、哔哩哔哩、抖音和 X/Twitter 五个常用平台，并额外提供两个公众号账号入口；其他平台不会挤满首页，用户可以通过“添加入口”自行增加、编辑或删除。
+
+“添加入口”提供可搜索的 34 个国内外创作平台预设，支持中文名、英文名和常见简称，并优先填写发布页、上传页或创作者后台；仍可改成任意安全的 HTTP(S) 网址。普通表单不显示分类和浏览器 Profile，勾选快捷方式后才显示默认浏览器、Chrome 或 Edge；旧 Profile 数据会继续保留用于高级快捷方式导出。
 
 配置默认保存在当前浏览器 origin 的 `localStorage`，不会自动上传。导出文件可能暴露账号标签、工作流结构和访问 URL，请按私人文件管理。CreatorDock 不读取或保存密码、Cookie、Token、登录状态、浏览器账号身份或浏览器资料内容。
 
 ### 多模型写作与个人风格
 
-首页的“写作实验室”是可选能力。你可以添加多个 OpenAI 兼容、DashScope、Gemini 或 Anthropic 模型，填写自己的 Base URL、模型 ID 和 API Key；模型元数据保存在本机，API Key 使用你设置的本机解锁口令通过 PBKDF2 + AES-GCM 加密。口令只存在当前页面内存中，不会保存、上传或写入导出文件。
+首页右侧的“AI 写作”只保留写作任务框和三个独立入口：“写作风格与去 AI 味”“写作 Skill”“封面生成”。顶部“模型设置”弹窗只管理模型、Base URL、模型 ID、API Key、连接测试和配置导入导出，不再混入风格与 Skill。你可以添加多个 OpenAI 兼容、DeepSeek、通义千问、智谱 GLM、Kimi、MiniMax、豆包/火山方舟、百川、腾讯混元、硅基流动、Gemini 或 Anthropic 模型；模型元数据保存在本机，API Key 使用你设置的本机解锁口令通过 PBKDF2 + AES-GCM 加密。口令只存在当前页面内存中，不会保存、上传或写入导出文件。
 
 每次生成会按固定顺序组合任务、当前风格描述、`.txt/.md` 样本、可编辑的去 AI 味规则和任务要求。样本仅作风格参考，不会被当作指令。可以创建多个风格、随时切换或临时关闭风格规则，并维护禁用词与必须习惯。
 
 请求由浏览器直接发送到你填写的服务地址；项目不提供代理、额度、账号或内置 Key。部分服务商的浏览器跨域策略可能阻止直连，这属于服务商配置边界，CreatorDock 不绕过 CORS，也不会把 Key 发到项目服务器。使用“导出 AI 配置”时只导出模型元数据和 `hasApiKey` 标记，导入后需要重新填写 Key。
+
+模型下拉目录同时提供“自定义型号”。内置型号只是无 Key 时的起始参考；要获取服务商当天实际可用的最新型号，请在“模型设置”填入对应 API Key 后点击“从平台刷新型号”。OpenAI 兼容、DeepSeek 和 Anthropic 使用服务商的 `/models` 列表，Gemini 使用官方 `models.list`；请求从本机直接发往你填写的接口，不经过 CreatorDock。若服务商关闭浏览器跨域或不提供列表接口，可直接选择“自定义型号”输入模型 ID。
+
+模型设置、写作风格、Skill 和封面接口都会以可移动、可调整大小的浮窗打开：拖动标题栏移动，拖动右下角调整尺寸；右侧 AI 写作与封面工作区仍保留在主界面。
+
+### Skill 建议与封面生成
+
+在独立的“写作 Skill”入口里可以从公开 GitHub 的 `SKILL.md` 导入 Skill，也可以上传本地 Markdown 文件。Skill 会保存在本机，可启用、停用和删除；它只会作为结构、标题、平台适配或封面方向的建议参考，不会被执行、代替用户发文，也不会自动发布内容。导入只允许 HTTPS 的 `github.com` / `raw.githubusercontent.com`，单个 Skill 限制为 120,000 字符。
+
+“封面生成”会打开独立的视觉工作区。用户可以选择 1:1、4:5、3:4、16:9、9:16、2:3 比例、预设风格、负面提示词和最多 3 张参考图，并在“封面设置”中填写自己的图片 API、模型 ID 和 API Key。负面提示词会作为明确规避要求合并进标准 prompt，不擅自发送未标准化字段；“生图 / 自定义接口”只提供兼容入口，不猜测未提供文档的私有协议。图片 Key 同样使用本机口令加密，不上传到 CreatorDock，也不会自动发布。
 
 ### Windows 本地 launcher 与快捷方式 helper
 
@@ -133,7 +176,7 @@ helper 检测本机 Chrome 和 Edge 的可执行文件，并只枚举形如 `Def
 
 ### 明确不做的事
 
-CreatorDock v1 不提供登录或凭据管理、自动发布、平台 analytics、云同步、浏览器 extension、Electron 或 Tauri 应用。它也不替用户操作平台账号、识别浏览器 profile 中的账号，或绕过平台认证。
+CreatorDock v1 不提供登录或凭据管理、自动发布、平台 analytics、云同步、浏览器 extension 或 Electron。Tauri 只负责桌面窗口、安装包、桌面入口和本地配置，不替用户操作平台账号、识别浏览器 profile 中的账号，或绕过平台认证。
 
 ## English
 
@@ -151,8 +194,10 @@ npm ci
 npm run dev
 ```
 
-For handoff screenshots, use a 1440×900 desktop viewport and capture the full
-workbench, two accounts on the same platform, a filtered or compact state, and
+On first launch, the desktop shell centers a window at half of the current work
+area, constrained to 820–1000 × 560–720. It keeps native maximize support and
+adds Float left, Restore window, and Reset small window controls. For handoff screenshots, capture both
+columns, two accounts on the same platform, a filtered or compact state, and
 the add-destination dialog. Store approved images under `docs/images/` (for
 example, `creatordock-overview.png`) only after checking that no private account
 labels, browser details, cookies, tokens, or other secrets are visible.
@@ -192,10 +237,68 @@ Open CreatorDock from an HTTPS deployment or a loopback production preview.
 Only the CreatorDock application shell is cached. Third-party creator
 destinations are not cached for offline use.
 
+### Windows and macOS desktop installation
+
+GitHub Releases provides one installer per operating system:
+
+- Windows: download the NSIS `.exe`. The installer creates `CreatorDock.lnk`
+  on the current user's Desktop. If that name belongs to another file, it uses
+  a suffixed name instead of overwriting it.
+- macOS: download the universal `.dmg`, drag CreatorDock to Applications, then
+  create or remove the optional Desktop alias from Preferences.
+- v1 packages are unsigned, so SmartScreen or Gatekeeper may show a warning.
+  This is expected for this release and is not a reason to download alternate
+  binaries.
+
+Desktop development requires Rust plus Windows MSVC Build Tools or macOS Xcode
+Command Line Tools:
+
+```powershell
+npm run tauri:info
+npm run tauri:dev
+npm run tauri:build
+```
+
+The browser PWA and desktop app share the same versioned JSON configuration
+format. The desktop app does not silently read browser `localStorage`; export
+the configuration in the browser and import it in the desktop app. Exports do
+not contain login credentials, cookies, tokens, or API keys.
+
+The default workbench starts with five common platforms (Xiaohongshu, WeChat
+Official Accounts, Bilibili, Douyin, and X/Twitter) plus two WeChat Official
+Accounts entries:
+`公众号·账号一` targets Chrome's `Default` profile and
+`公众号·账号二` targets Edge's `Default` profile. They are shortcut-enabled
+by default, and can be renamed, disabled, or duplicated like any other entry;
+the profile names are only browser directory selectors, not account identities.
+
+Add destination searches 34 domestic and international creator presets by
+Chinese name, English name, or common alias, and fills a publishing, upload, or
+creator-console URL where available. Any safe HTTP(S) URL remains editable.
+Category and profile-directory fields stay out of the normal form; the browser
+selector appears only when shortcut export is enabled, while legacy profile
+data remains available to the advanced Windows helper.
+
+### Platform icon assets
+
+`public/icons/creator-dock-sprite.png` is a labeled 4×4 sprite containing
+CreatorDock, the first platform set, AI Writing, and Custom Site. The slicing
+script keeps those sixteen tiles and generates twenty-one matching abstract
+brand-color icons. The final check validates thirty-seven 512×512 PNG assets:
+
+```powershell
+npm run icons:slice
+npm run test:icons
+```
+
+Cards render the icon and the user-facing entry name; platform categories and
+shortcut metadata stay out of the main surface.
+
 ### Backup, import, and privacy boundary
 
-The full configuration export contains labels, URLs, groups, order, theme,
-density, browser choices, profile-directory names, and shortcut flags. The
+The settings panel defaults to Chinese and can switch to English. The choice is
+saved together with theme and density. The full configuration export contains
+the language, labels, URLs, order, theme, density, browser choices, legacy-compatible profile-directory names, and shortcut flags. Schema v2 no longer stores categories. The
 shortcut-only export contains only fields consumed by the Windows helper.
 Invalid imports retain the current valid configuration.
 
@@ -207,13 +310,22 @@ browser account identity, or browser-profile contents.
 
 ### Multi-model writing and personal style
 
-The optional “Writing lab” supports multiple OpenAI-compatible, DashScope,
-Gemini, and Anthropic profiles. Users supply the provider URL, model ID, and
+The optional “AI writing” workspace keeps the task box on the home surface and
+shows three focused entries for writing style/humanization, Writing Skill, and
+cover generation. The “Model settings” dialog contains model connection fields
+only. It
+supports multiple OpenAI-compatible, DeepSeek, DashScope, GLM, Kimi, MiniMax,
+Doubao/Volcengine, Baichuan, Hunyuan, SiliconFlow, Gemini, and Anthropic profiles. Users supply the provider URL, model ID, and
 their own key. A key is encrypted locally with a user-provided passphrase using
 PBKDF2 + AES-GCM; the passphrase is never persisted, exported, logged, or sent
 to a CreatorDock server. Browser requests go directly to the supplied URL, so
 provider CORS rules still apply and CreatorDock includes no proxy, quota,
 account, or built-in key.
+
+Model settings, writing style, Skill, and cover-provider settings open in
+movable, resizable panels. Drag a panel header to move it and its lower-right
+handle to resize it; the right-side AI writing and cover workspaces remain on
+the main surface.
 
 Writing requests use one prompt pipeline: task, style description, `.txt/.md`
 samples, editable anti-AI rules, then task requirements. Samples are labeled as
@@ -221,6 +333,22 @@ stylistic references rather than instructions. Style presets can be switched or
 temporarily disabled, with forbidden words and required habits editable in the
 same panel. AI exports contain model metadata and a `hasApiKey` flag only;
 imported profiles require the key to be entered again.
+
+### Skill suggestions and cover generation
+
+The separate Writing Skill panel can import a public GitHub `SKILL.md` or a local Markdown
+file. Skills are stored locally and can be enabled, disabled, or deleted. They
+are advisory references for structure, headlines, platform adaptation, or cover
+direction only; they are never executed and never publish content. Imports are
+restricted to HTTPS GitHub hosts and each skill is limited to 120,000 characters.
+
+The “Cover generation” entry opens a separate visual workspace with 1:1, 4:5, 3:4,
+16:9, 9:16, and 2:3 ratios, style presets, an optional negative prompt, and up to three local reference
+images. In “Cover settings”, users provide their own HTTPS image endpoint,
+model ID, and API key. Requests use an OpenAI Images-compatible body; the
+“Image generation / custom” option is a compatibility entry rather than an undocumented
+vendor adapter. Keys are encrypted locally and no image is published for the
+user.
 
 ### Durable Windows launcher and shortcut helper
 
@@ -282,8 +410,9 @@ No local script creates a remote or pushes the repository.
 ### Explicit non-goals
 
 CreatorDock v1 does not provide platform login or credential management,
-publishing, platform analytics, cloud sync, a browser extension, Electron, or
-Tauri. The optional AI key is user-supplied and locally encrypted; it is not a
+publishing, platform analytics, cloud sync, a browser extension, or Electron.
+Tauri is only the desktop window, installer, shortcut, and local storage shell.
+The optional AI key is user-supplied and locally encrypted; it is not a
 platform credential and is never sent to a CreatorDock server. The app does not
 operate platform accounts, identify accounts inside browser profiles, or bypass
 platform authentication.

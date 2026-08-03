@@ -4,7 +4,43 @@ import { DEFAULT_HUMANIZATION_RULES, type HumanizationRules, type StyleSample, t
 export const AI_CONFIG_SCHEMA_VERSION = 1 as const
 export const AI_CONFIG_STORAGE_KEY = 'creatordock.ai.v1'
 
-export type ProviderKind = 'openai-compatible' | 'dashscope' | 'gemini' | 'anthropic'
+export type ProviderKind =
+  | 'openai-compatible'
+  | 'dashscope'
+  | 'deepseek'
+  | 'zhipu'
+  | 'moonshot'
+  | 'minimax'
+  | 'doubao'
+  | 'baichuan'
+  | 'hunyuan'
+  | 'siliconflow'
+  | 'gemini'
+  | 'anthropic'
+
+export interface ProviderOption {
+  id: ProviderKind
+  label: string
+  region: 'global' | 'china'
+  defaultBaseUrl: string
+}
+
+/**
+ * A curated model choice for the simple setup flow.  The technical fields are
+ * intentionally kept in code so users only choose a model and provide their
+ * own API key.
+ */
+export interface ModelPreset {
+  id: string
+  label: string
+  provider: ProviderKind
+  baseUrl: string
+  model: string
+  temperature: number
+  maxTokens: number
+  streaming: boolean
+  imageGeneration: boolean
+}
 
 export interface ModelProfile {
   id: string
@@ -48,12 +84,60 @@ export interface AiStorageAdapter {
   setItem(key: string, value: string): void
 }
 
-const PROVIDER_DEFAULTS: Record<ProviderKind, string> = {
-  'openai-compatible': 'https://api.openai.com/v1',
-  dashscope: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  gemini: 'https://generativelanguage.googleapis.com',
-  anthropic: 'https://api.anthropic.com',
+export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
+  { id: 'openai-compatible', label: 'OpenAI 兼容', region: 'global', defaultBaseUrl: 'https://api.openai.com/v1' },
+  { id: 'deepseek', label: 'DeepSeek', region: 'china', defaultBaseUrl: 'https://api.deepseek.com/v1' },
+  { id: 'dashscope', label: '通义千问 / DashScope', region: 'china', defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  { id: 'zhipu', label: '智谱 GLM', region: 'china', defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
+  { id: 'moonshot', label: '月之暗面 / Kimi', region: 'china', defaultBaseUrl: 'https://api.moonshot.cn/v1' },
+  { id: 'minimax', label: 'MiniMax', region: 'china', defaultBaseUrl: 'https://api.minimaxi.com/v1' },
+  { id: 'doubao', label: '豆包 / 火山方舟', region: 'china', defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3' },
+  { id: 'baichuan', label: '百川智能', region: 'china', defaultBaseUrl: 'https://api.baichuan-ai.com/v1' },
+  { id: 'hunyuan', label: '腾讯混元', region: 'china', defaultBaseUrl: 'https://api.hunyuan.cloud.tencent.com/v1' },
+  { id: 'siliconflow', label: '硅基流动', region: 'china', defaultBaseUrl: 'https://api.siliconflow.cn/v1' },
+  { id: 'gemini', label: 'Google Gemini', region: 'global', defaultBaseUrl: 'https://generativelanguage.googleapis.com' },
+  { id: 'anthropic', label: 'Anthropic Claude', region: 'global', defaultBaseUrl: 'https://api.anthropic.com' },
+]
+
+export const MODEL_PRESETS: readonly ModelPreset[] = [
+  { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash（快速）', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro（推理）', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'qwen3.7-plus', label: '通义千问 3.7 Plus', provider: 'dashscope', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.7-plus', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'qwen3.7-max', label: '通义千问 3.7 Max', provider: 'dashscope', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.7-max', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'qwen3.6-flash', label: '通义千问 3.6 Flash（快速）', provider: 'dashscope', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.6-flash', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'glm-5.2', label: '智谱 GLM 5.2', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.2', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'kimi-k2.5', label: 'Kimi K2.5', provider: 'moonshot', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.5', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'minimax-m2.7', label: 'MiniMax M2.7', provider: 'minimax', baseUrl: 'https://api.minimaxi.com/v1', model: 'MiniMax-M2.7', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'openai-gpt-5.1', label: 'OpenAI GPT-5.1', provider: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.1', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'openai-gpt-5-mini', label: 'OpenAI GPT-5 mini（快速）', provider: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5-mini', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'gemini-3.6-flash', label: 'Google Gemini 3.6 Flash', provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3.6-flash', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'gemini-3.5-flash', label: 'Google Gemini 3.5 Flash', provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3.5-flash', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash-Lite（快速）', provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3.1-flash-lite', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'claude-sonnet-4', label: 'Claude Sonnet 4', provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-0', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'claude-opus-4', label: 'Claude Opus 4', provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-opus-4-0', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+]
+
+export function findModelPreset(model: Pick<ModelProfile, 'provider' | 'model'>): ModelPreset | undefined {
+  return MODEL_PRESETS.find((preset) => preset.provider === model.provider && preset.model === model.model)
 }
+
+export function modelInputFromPreset(preset: ModelPreset, apiKey = ''): ModelProfileInput {
+  return {
+    name: preset.label,
+    provider: preset.provider,
+    baseUrl: preset.baseUrl,
+    model: preset.model,
+    apiKey,
+    temperature: preset.temperature,
+    maxTokens: preset.maxTokens,
+    streaming: preset.streaming,
+    imageGeneration: preset.imageGeneration,
+    enabled: true,
+  }
+}
+
+const PROVIDER_DEFAULTS = Object.fromEntries(PROVIDER_OPTIONS.map((option) => [option.id, option.defaultBaseUrl])) as Record<ProviderKind, string>
+const SUPPORTED_PROVIDERS = new Set<ProviderKind>(PROVIDER_OPTIONS.map((option) => option.id))
 
 const createId = (prefix: string): string => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
@@ -157,7 +241,7 @@ async function buildModelProfile(input: ModelProfileInput, passphrase: string, i
 function normalizeModelInput(input: ModelProfileInput): Omit<ModelProfile, 'id' | 'encryptedApiKey'> {
   if (!input.name.trim()) throw new Error('Model name is required.')
   if (!input.model.trim()) throw new Error('Default model name is required.')
-  if (!['openai-compatible', 'dashscope', 'gemini', 'anthropic'].includes(input.provider)) throw new Error('Provider type is invalid.')
+  if (!SUPPORTED_PROVIDERS.has(input.provider)) throw new Error('Provider type is invalid.')
   const baseUrl = (input.baseUrl?.trim() || PROVIDER_DEFAULTS[input.provider]).replace(/\/+$/, '')
   if (!isHttpUrl(baseUrl)) throw new Error('Base URL must use HTTP(S).')
   if (input.temperature !== undefined && (input.temperature < 0 || input.temperature > 2)) throw new Error('Temperature must be between 0 and 2.')
@@ -182,11 +266,14 @@ function parseModel(value: unknown): ModelProfile {
   if (!value || typeof value !== 'object') throw new Error('Model profile is invalid.')
   const model = value as Record<string, unknown>
   if (typeof model.id !== 'string' || typeof model.name !== 'string' || typeof model.provider !== 'string' || typeof model.baseUrl !== 'string' || typeof model.model !== 'string') throw new Error('Model profile fields are invalid.')
-  if (!['openai-compatible', 'dashscope', 'gemini', 'anthropic'].includes(model.provider)) throw new Error('Provider type is invalid.')
+  if (!SUPPORTED_PROVIDERS.has(model.provider as ProviderKind)) throw new Error('Provider type is invalid.')
   if (!model.id.trim() || !model.name.trim() || !model.model.trim() || !isHttpUrl(model.baseUrl)) throw new Error('Model profile URL or required fields are invalid.')
   if (typeof model.temperature === 'number' && (model.temperature < 0 || model.temperature > 2)) throw new Error('Temperature must be between 0 and 2.')
   if (typeof model.maxTokens === 'number' && (!Number.isInteger(model.maxTokens) || model.maxTokens < 1)) throw new Error('Max Tokens must be a positive integer.')
-  return { id: model.id, name: model.name, provider: model.provider as ProviderKind, baseUrl: model.baseUrl.replace(/\/+$/, ''), model: model.model, ...(isEncryptedSecret(model.encryptedApiKey) ? { encryptedApiKey: model.encryptedApiKey } : {}), ...(typeof model.temperature === 'number' ? { temperature: model.temperature } : {}), ...(typeof model.maxTokens === 'number' ? { maxTokens: model.maxTokens } : {}), streaming: Boolean(model.streaming), imageGeneration: Boolean(model.imageGeneration), enabled: model.enabled !== false }
+  const legacyPreset = model.name.trim() === '1' || model.model === 'deepseek-v4' || model.baseUrl.includes('platform.deepseek.com')
+    ? MODEL_PRESETS.find((preset) => preset.provider === model.provider)
+    : undefined
+  return { id: model.id, name: legacyPreset?.label ?? model.name, provider: model.provider as ProviderKind, baseUrl: (legacyPreset?.baseUrl ?? model.baseUrl).replace(/\/+$/, ''), model: legacyPreset?.model ?? model.model, ...(isEncryptedSecret(model.encryptedApiKey) ? { encryptedApiKey: model.encryptedApiKey } : {}), ...(typeof model.temperature === 'number' ? { temperature: model.temperature } : legacyPreset ? { temperature: legacyPreset.temperature } : {}), ...(typeof model.maxTokens === 'number' ? { maxTokens: model.maxTokens } : legacyPreset ? { maxTokens: legacyPreset.maxTokens } : {}), streaming: legacyPreset?.streaming ?? Boolean(model.streaming), imageGeneration: legacyPreset?.imageGeneration ?? Boolean(model.imageGeneration), enabled: model.enabled !== false }
 }
 function parseStyle(value: unknown): WritingStylePreset { if (!value || typeof value !== 'object') throw new Error('Writing style preset is invalid.'); const style = value as Record<string, unknown>; if (typeof style.id !== 'string' || typeof style.name !== 'string' || typeof style.description !== 'string' || !Array.isArray(style.samples)) throw new Error('Writing style fields are invalid.'); const samples = style.samples.map((sample) => { if (!sample || typeof sample !== 'object' || typeof (sample as Record<string, unknown>).id !== 'string' || typeof (sample as Record<string, unknown>).name !== 'string' || typeof (sample as Record<string, unknown>).content !== 'string') throw new Error('Writing style sample is invalid.'); return sample as StyleSample }); return { id: style.id, name: style.name, description: style.description, samples, isDefault: Boolean(style.isDefault) } }
 function parseHumanization(value: unknown): HumanizationRules { if (!value || typeof value !== 'object') return { ...DEFAULT_HUMANIZATION_RULES, forbiddenWords: [], requiredHabits: [] }; const rules = value as Record<string, unknown>; return { enabled: rules.enabled !== false, rules: typeof rules.rules === 'string' ? rules.rules : DEFAULT_HUMANIZATION_RULES.rules, forbiddenWords: Array.isArray(rules.forbiddenWords) ? rules.forbiddenWords.filter((item): item is string => typeof item === 'string') : [], requiredHabits: Array.isArray(rules.requiredHabits) ? rules.requiredHabits.filter((item): item is string => typeof item === 'string') : [] } }

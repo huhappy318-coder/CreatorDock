@@ -28,6 +28,14 @@ jobs:
       - name: Install from lockfile
         run: npm ci
 
+      - name: Set up Python for icon validation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install icon validation dependency
+        run: python -m pip install --disable-pip-version-check pillow
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
@@ -46,6 +54,9 @@ jobs:
 
       - name: Run TypeScript checks
         run: npm run typecheck
+
+      - name: Validate platform icon tiles
+        run: npm run test:icons
 
       - name: Build production site
         run: npm run build

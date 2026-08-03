@@ -7,6 +7,9 @@ import {
   exportAiConfig,
   importAiConfig,
   loadAiConfig,
+  MODEL_PRESETS,
+  modelInputFromPreset,
+  PROVIDER_OPTIONS,
   unlockModelApiKey,
   updateHumanizationRules,
   type AiConfig,
@@ -92,5 +95,37 @@ describe('encrypted AI configuration', () => {
     expect(config.models).toHaveLength(2)
     expect(config.styles.filter((style) => style.isDefault)).toHaveLength(1)
     expect(config.humanization.forbiddenWords).toContain('首先')
+  })
+
+  it('offers China-focused providers with safe default HTTPS endpoints', async () => {
+    let config = createDefaultAiConfig()
+    for (const option of PROVIDER_OPTIONS.filter((item) => item.region === 'china')) {
+      config = await addModelProfile(config, {
+        ...openAiInput,
+        name: option.label,
+        provider: option.id,
+        baseUrl: undefined,
+        model: `${option.id}-model`,
+      }, 'passphrase')
+    }
+    expect(config.models).toHaveLength(PROVIDER_OPTIONS.filter((item) => item.region === 'china').length)
+    expect(config.models.every((model) => model.baseUrl.startsWith('https://'))).toBe(true)
+  })
+
+  it('provides Chinese model presets that fill technical fields automatically', () => {
+    expect(MODEL_PRESETS.length).toBeGreaterThan(3)
+    const input = modelInputFromPreset(MODEL_PRESETS[0], 'sk-user-supplied')
+    expect(input).toMatchObject({ name: 'DeepSeek V4 Flash（快速）', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash', temperature: 0.7, maxTokens: 8192, streaming: true })
+    expect(input.apiKey).toBe('sk-user-supplied')
+  })
+
+  it('repairs the legacy placeholder DeepSeek profile when loading saved config', () => {
+    const current = createDefaultAiConfig()
+    const result = importAiConfig(JSON.stringify({
+      schemaVersion: 1,
+      models: [{ id: 'legacy', name: '1', provider: 'deepseek', baseUrl: 'https://platform.deepseek.com/v4', model: 'deepseek-v4', streaming: true, imageGeneration: false, enabled: true }],
+      styles: [], humanization: current.humanization,
+    }), current)
+    expect(result.config.models[0]).toMatchObject({ name: 'DeepSeek V4 Flash（快速）', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash', temperature: 0.7, maxTokens: 8192 })
   })
 })
