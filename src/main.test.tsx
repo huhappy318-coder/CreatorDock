@@ -96,6 +96,32 @@ describe('catalog discovery', () => {
 
     expect(open).toHaveBeenCalledWith('https://example.com/studio', browserWindowName('wechat-one'), expect.stringContaining('popup'))
     expect(localStorage.getItem('creatordock.browser.windows.v1')).toContain('wechat-one')
+    expect(screen.getByRole('status')).toHaveTextContent('opened or focused this account’s browser window')
+  })
+
+  it('offers a deliberate new window without replacing the account-window record', () => {
+    seed(config([entry({ id: 'new-window-entry', displayName: 'New window account' })]))
+    const open = vi.spyOn(window, 'open').mockImplementation(() => ({ focus: vi.fn() } as unknown as Window))
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for New window account' }))
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Open in new window' }))
+
+    expect(open).toHaveBeenCalledWith('https://example.com/studio', '_blank', expect.stringContaining('popup'))
+    expect(localStorage.getItem('creatordock.browser.windows.v1')).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('opened in a new browser window')
+  })
+
+  it('keeps the native new-tab fallback when an explicit new window is blocked', () => {
+    seed(config([entry({ id: 'blocked-new-window', displayName: 'Blocked new window account' })]))
+    vi.spyOn(window, 'open').mockImplementation(() => null)
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Blocked new window account' }))
+    const openedNormally = fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Open in new window' }))
+
+    expect(openedNormally).toBe(true)
+    expect(screen.getByRole('status')).toHaveTextContent('browser blocked a separate window')
   })
 
   it('falls back to the normal new-tab link when a browser blocks the separate window', () => {
@@ -111,6 +137,30 @@ describe('catalog discovery', () => {
 })
 
 describe('destination lifecycle', () => {
+  it('lets users name and review a copied entry before adding it', () => {
+    seed(config([entry({
+      browserTarget: 'chrome',
+      profileDirectoryName: 'Profile 2',
+      createShortcut: true,
+    })]))
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Studio account' }))
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Copy destination' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Copy destination' })
+    expect(within(dialog).getByLabelText('Account label')).toHaveValue('Studio account copy')
+    fireEvent.change(within(dialog).getByLabelText('Account label'), { target: { value: 'Second studio account' } })
+    fireEvent.change(within(dialog).getByLabelText('Destination URL'), { target: { value: 'https://example.com/second-studio' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save destination' }))
+
+    const saved = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY)!) as CreatorDockConfig
+    expect(saved.entries).toHaveLength(2)
+    expect(saved.entries[0]).toMatchObject({ displayName: 'Studio account', profileDirectoryName: 'Profile 2' })
+    expect(saved.entries[1]).toMatchObject({ displayName: 'Second studio account', destinationUrl: 'https://example.com/second-studio', browserTarget: 'chrome', createShortcut: true })
+    expect(saved.entries[1]).not.toHaveProperty('profileDirectoryName')
+  })
+
   it('searches platform aliases and keeps category and profile fields out of the simple form', () => {
     seed(config([]))
     render(<App />)

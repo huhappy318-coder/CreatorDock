@@ -39,10 +39,15 @@ export function openBrowserEntryWindow(
   openWindow: (url?: string, target?: string, features?: string) => Window | null = window.open.bind(window),
 ): boolean {
   const popup = openWindow(url, browserWindowName(entryId), 'popup,width=1180,height=820,resizable=yes,scrollbars=yes')
-  if (!popup) return false
-  try { popup.opener = null } catch { /* The browser may forbid changing opener for an external window. */ }
-  try { popup.focus?.() } catch { /* A blocked focus does not prevent the destination from opening. */ }
-  return true
+  return finishBrowserWindowOpen(popup)
+}
+
+export function openBrowserEntryInNewWindow(
+  url: string,
+  openWindow: (url?: string, target?: string, features?: string) => Window | null = window.open.bind(window),
+): boolean {
+  const popup = openWindow(url, '_blank', 'popup,width=1180,height=820,resizable=yes,scrollbars=yes')
+  return finishBrowserWindowOpen(popup)
 }
 
 function stableHash(value: string): string {
@@ -52,6 +57,13 @@ function stableHash(value: string): string {
     hash = Math.imul(hash, 16_777_619)
   }
   return (hash >>> 0).toString(36)
+}
+
+function finishBrowserWindowOpen(popup: Window | null): boolean {
+  if (!popup) return false
+  try { popup.opener = null } catch { /* The browser may forbid changing opener for an external window. */ }
+  try { popup.focus?.() } catch { /* A blocked focus does not prevent the destination from opening. */ }
+  return true
 }
 
 function redactRecordUrl(value: string): string {

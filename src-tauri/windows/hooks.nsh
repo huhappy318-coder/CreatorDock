@@ -72,13 +72,20 @@ creator_dock_find_suffix:
 
 creator_dock_create_suffix:
   CreateShortCut "$2" "$INSTDIR\creator_dock.exe" "" "$INSTDIR\creator_dock.exe" 0 SW_SHOWNORMAL
+  ; SetLnkAppUserModelId uses $0 through $5 internally, including $2. Keep the
+  ; shortcut path intact so the registry records the link rather than a COM
+  ; pointer left by that macro.
+  Push $2
   !insertmacro SetLnkAppUserModelId "$2"
+  Pop $2
   Goto creator_dock_record_shortcut
 
 creator_dock_create_primary:
   CreateShortCut "$DESKTOP\CreatorDock.lnk" "$INSTDIR\creator_dock.exe" "" "$INSTDIR\creator_dock.exe" 0 SW_SHOWNORMAL
   StrCpy $2 "$DESKTOP\CreatorDock.lnk"
+  Push $2
   !insertmacro SetLnkAppUserModelId "$2"
+  Pop $2
 creator_dock_record_shortcut:
   WriteRegStr HKCU "Software\CreatorDock" "DesktopShortcut" "$2"
   Goto creator_dock_start_menu_find_registered
@@ -118,13 +125,19 @@ creator_dock_start_menu_find_suffix:
 creator_dock_start_menu_create_suffix:
   CreateDirectory "$SMPROGRAMS\CreatorDock"
   CreateShortCut "$3" "$INSTDIR\creator_dock.exe" "" "$INSTDIR\creator_dock.exe" 0 SW_SHOWNORMAL
+  ; SetLnkAppUserModelId also uses $3 internally; preserve the path before
+  ; writing the CreatorDock-owned Start Menu location to the registry.
+  Push $3
   !insertmacro SetLnkAppUserModelId "$3"
+  Pop $3
   Goto creator_dock_start_menu_record_shortcut
 
 creator_dock_start_menu_create_primary:
   CreateDirectory "$SMPROGRAMS\CreatorDock"
   CreateShortCut "$3" "$INSTDIR\creator_dock.exe" "" "$INSTDIR\creator_dock.exe" 0 SW_SHOWNORMAL
+  Push $3
   !insertmacro SetLnkAppUserModelId "$3"
+  Pop $3
 creator_dock_start_menu_record_shortcut:
   WriteRegStr HKCU "Software\CreatorDock" "StartMenuShortcut" "$3"
 creator_dock_postinstall_done:

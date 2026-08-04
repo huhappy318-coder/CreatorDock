@@ -25,16 +25,16 @@ describe('first model setup', () => {
     fireEvent.click(screen.getByRole('button', { name: '去设置模型' }))
     fireEvent.change(screen.getByLabelText('本机解锁口令'), { target: { value: 'local-passphrase' } })
     fireEvent.change(screen.getByLabelText(/API Key/), { target: { value: 'sk-draft-only' } })
-    fireEvent.click(screen.getByRole('button', { name: '测试本次设置' }))
+    fireEvent.click(screen.getByRole('button', { name: '仅测试本次设置' }))
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('本次设置连接成功'), cryptoFlowTimeout)
     expect(localStorage.getItem(AI_CONFIG_STORAGE_KEY)).toBeNull()
     expect(document.body.textContent).not.toContain('sk-draft-only')
 
-    fireEvent.click(screen.getByRole('button', { name: '保存模型' }))
+    fireEvent.click(screen.getByRole('button', { name: '测试并保存' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument(), cryptoFlowTimeout)
-    expect(screen.getByRole('status')).toHaveTextContent('模型已保存')
-    expect(screen.getByLabelText('模型连接状态')).toHaveTextContent('已保存，尚未验证连接')
+    expect(screen.getByRole('status')).toHaveTextContent('连接成功，模型已加密保存在本机并回到写作区')
+    expect(screen.getByLabelText('模型连接状态')).toHaveTextContent('上次连接成功 · 8 ms')
     expect(localStorage.getItem(AI_CONFIG_STORAGE_KEY)).not.toContain('sk-draft-only')
 
     fireEvent.click(screen.getByRole('button', { name: '测试连接' }))
@@ -51,7 +51,7 @@ describe('first model setup', () => {
     fireEvent.click(screen.getByRole('button', { name: '去设置模型' }))
     fireEvent.change(screen.getByLabelText('本机解锁口令'), { target: { value: 'correct-passphrase' } })
     fireEvent.change(screen.getByLabelText(/API Key/), { target: { value: 'sk-connection-status' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存模型' }))
+    fireEvent.click(screen.getByRole('button', { name: '测试并保存' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument(), cryptoFlowTimeout)
 
     fireEvent.click(screen.getByRole('button', { name: '测试连接' }))
@@ -73,7 +73,7 @@ describe('first model setup', () => {
     fireEvent.click(screen.getByRole('button', { name: '去设置模型' }))
     fireEvent.change(screen.getByLabelText('本机解锁口令'), { target: { value: 'import-passphrase' } })
     fireEvent.change(screen.getByLabelText(/API Key/), { target: { value: 'sk-import-status' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存模型' }))
+    fireEvent.click(screen.getByRole('button', { name: '测试并保存' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument(), cryptoFlowTimeout)
 
     fireEvent.click(screen.getByRole('button', { name: '测试连接' }))

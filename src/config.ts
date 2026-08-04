@@ -107,6 +107,34 @@ export function addLaunchEntry(config: CreatorDockConfig, entry: NewLaunchEntry,
   return { ...config, entries: [...config.entries, { ...normalized, id }] }
 }
 
+export function suggestDuplicateDisplayName(config: CreatorDockConfig, sourceId: string, copySuffix: string): string {
+  const source = config.entries.find((candidate) => candidate.id === sourceId)
+  if (!source) throw new Error(`Launch entry "${sourceId}" does not exist.`)
+
+  const base = `${source.displayName} ${copySuffix.trim() || 'copy'}`
+  const existingNames = new Set(config.entries.map((entry) => entry.displayName.toLocaleLowerCase()))
+  let candidate = base
+  let index = 2
+  while (existingNames.has(candidate.toLocaleLowerCase())) {
+    candidate = `${base} ${index}`
+    index += 1
+  }
+  return candidate
+}
+
+export function duplicateLaunchEntry(
+  config: CreatorDockConfig,
+  sourceId: string,
+  changes: NewLaunchEntry,
+  idFactory: IdFactory = createId,
+): CreatorDockConfig {
+  if (!config.entries.some((candidate) => candidate.id === sourceId)) throw new Error(`Launch entry "${sourceId}" does not exist.`)
+
+  const { displayName, destinationUrl, browserTarget, createShortcut, platformPresetId } = changes
+  // The legacy browser profile is deliberately not copied: it is hidden from the simple form and may point at a different signed-in account.
+  return addLaunchEntry(config, { displayName, destinationUrl, browserTarget, createShortcut, platformPresetId }, idFactory)
+}
+
 export function editLaunchEntry(config: CreatorDockConfig, id: string, changes: Partial<NewLaunchEntry>): CreatorDockConfig {
   const entry = config.entries.find((candidate) => candidate.id === id)
   if (!entry) throw new Error(`Launch entry "${id}" does not exist.`)

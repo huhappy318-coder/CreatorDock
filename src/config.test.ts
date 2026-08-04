@@ -5,6 +5,7 @@ import {
   createDefaultConfig,
   createShortcutExport,
   deleteLaunchEntry,
+  duplicateLaunchEntry,
   editLaunchEntry,
   exportConfig,
   filterLaunchEntries,
@@ -13,6 +14,7 @@ import {
   loadConfig,
   reorderLaunchEntry,
   saveConfig,
+  suggestDuplicateDisplayName,
   type CreatorDockConfig,
   type StorageAdapter,
 } from './config'
@@ -96,6 +98,32 @@ describe('launch entry mutations', () => {
 
     expect(edited.entries[0]).toMatchObject({ id: 'entry-1', displayName: 'New', destinationUrl: 'https://example.org' })
     expect(() => editLaunchEntry(edited, 'entry-1', { destinationUrl: 'file:///unsafe' })).toThrow('HTTP(S)')
+  })
+
+  it('creates a fresh editable duplicate without carrying a hidden legacy browser profile', () => {
+    const original = addLaunchEntry(emptyConfig(), {
+      displayName: '公众号·账号一',
+      destinationUrl: 'https://mp.weixin.qq.com/',
+      browserTarget: 'chrome',
+      profileDirectoryName: 'Profile 2',
+      createShortcut: true,
+      platformPresetId: 'wechat-official-accounts',
+    }, ids('original'))
+    const copyName = suggestDuplicateDisplayName(original, 'original', '副本')
+    const duplicated = duplicateLaunchEntry(original, 'original', {
+      displayName: copyName,
+      destinationUrl: 'https://mp.weixin.qq.com/',
+      browserTarget: 'edge',
+      createShortcut: true,
+      platformPresetId: 'wechat-official-accounts',
+    }, ids('copy'))
+
+    expect(copyName).toBe('公众号·账号一 副本')
+    expect(duplicated.entries).toMatchObject([
+      { id: 'original', displayName: '公众号·账号一', profileDirectoryName: 'Profile 2' },
+      { id: 'copy', displayName: '公众号·账号一 副本', browserTarget: 'edge', createShortcut: true },
+    ])
+    expect(duplicated.entries[1]).not.toHaveProperty('profileDirectoryName')
   })
 
   it('deletes and reorders only the requested entries', () => {

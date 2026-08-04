@@ -128,16 +128,25 @@ jobs:
       - name: Build universal DMG
         run: npm run tauri build -- --target universal-apple-darwin --bundles dmg --no-sign --ci
 
-      - name: Verify universal app bundle and DMG
+      - name: Verify universal app bundle inside DMG
         shell: bash
         run: |
           set -euo pipefail
           bundle_root="src-tauri/target/universal-apple-darwin/release/bundle"
-          app="$(find "$bundle_root/macos" -maxdepth 1 -name '*.app' -print -quit)"
-          dmg="$(find "$bundle_root/dmg" -maxdepth 1 -name '*.dmg' -print -quit)"
-          test -n "$app"
+          test -d "$bundle_root/dmg"
+          dmg="$(find "$bundle_root/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
           test -n "$dmg"
           test -s "$dmg"
+          hdiutil verify "$dmg" >/dev/null
+          mount_dir="$(mktemp -d)"
+          cleanup() {
+            hdiutil detach "$mount_dir" -quiet >/dev/null 2>&1 || true
+            rmdir "$mount_dir" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount_dir" "$dmg" >/dev/null
+          app="$(find "$mount_dir" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$app"
           test -f "$app/Contents/Info.plist"
           test -f "$app/Contents/Resources/icon.icns"
           test -x "$app/Contents/MacOS/creator_dock"

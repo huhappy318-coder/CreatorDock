@@ -46,6 +46,30 @@ if ($hooksSource -notmatch '(?ms)^creator_dock_create_suffix:\s*.*?^\s*CreateSho
 if ($hooksSource -notmatch '(?ms)^creator_dock_start_menu_create_primary:\s*.*?^\s*CreateShortCut\s+"\$3"') {
     throw 'NSIS post-install hook must restore the CreatorDock Start Menu shortcut after suppressing Tauri defaults.'
 }
+function Assert-SetLnkPreservesShortcutRegister {
+    param(
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][string]$Register
+    )
+
+    $block = [regex]::Match(
+        $hooksSource,
+        "(?ms)^$([regex]::Escape($Label)):\s*(.*?)(?=^[A-Za-z0-9_]+:|^!macroend)"
+    )
+    if (-not $block.Success) {
+        throw "NSIS hook label was not found for shortcut-register verification: $Label"
+    }
+    $escapedRegister = [regex]::Escape($Register)
+    $preservationPattern = '(?ms)Push\s+{0}\s*!insertmacro\s+SetLnkAppUserModelId\s+"{0}"\s*Pop\s+{0}' -f $escapedRegister
+    if ($block.Groups[1].Value -notmatch $preservationPattern) {
+        throw "NSIS hook $Label must preserve $Register across SetLnkAppUserModelId before registry recording."
+    }
+}
+
+Assert-SetLnkPreservesShortcutRegister -Label 'creator_dock_create_suffix' -Register '$2'
+Assert-SetLnkPreservesShortcutRegister -Label 'creator_dock_create_primary' -Register '$2'
+Assert-SetLnkPreservesShortcutRegister -Label 'creator_dock_start_menu_create_suffix' -Register '$3'
+Assert-SetLnkPreservesShortcutRegister -Label 'creator_dock_start_menu_create_primary' -Register '$3'
 
 $installedProduct = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorDock' -ErrorAction SilentlyContinue
 if ($installedProduct -and $installedProduct.InstallLocation) {
@@ -102,6 +126,7 @@ function Invoke-InstallerScenario {
 
     New-Item -ItemType Directory -Path $InstallRoot | Out-Null
     $createdShortcut = $null
+    $createdStartMenuShortcut = $null
     $uninstaller = $null
     try {
         $process = Start-Process -FilePath $installer -ArgumentList @($InstallerArguments + "/D=$InstallRoot") -Wait -PassThru
@@ -136,6 +161,15 @@ function Invoke-InstallerScenario {
             throw "$Name registered DesktopShortcut as $registeredShortcut instead of $createdShortcut."
         }
 
+        $registeredStartMenuShortcut = (Get-ItemProperty -LiteralPath 'HKCU:\Software\CreatorDock' -Name StartMenuShortcut -ErrorAction Stop).StartMenuShortcut
+        if (-not (Test-Path -LiteralPath $registeredStartMenuShortcut -PathType Leaf)) {
+            throw "$Name registered StartMenuShortcut at a missing path: $registeredStartMenuShortcut"
+        }
+        if ((Get-ShortcutTarget $registeredStartMenuShortcut) -ine $targetExecutable) {
+            throw "$Name registered StartMenuShortcut as $registeredStartMenuShortcut, which does not target $targetExecutable."
+        }
+        $createdStartMenuShortcut = [IO.Path]::GetFullPath($registeredStartMenuShortcut)
+
         $uninstaller = Join-Path $InstallRoot 'uninstall.exe'
         if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
             throw "$Name uninstaller was not found: $uninstaller"
@@ -149,6 +183,11 @@ function Invoke-InstallerScenario {
         if (Test-Path -LiteralPath $createdShortcut -PathType Leaf) {
             if ((Get-ShortcutTarget $createdShortcut) -ieq $targetExecutable) {
                 throw "$Name installer-owned Desktop shortcut was not removed: $createdShortcut"
+            }
+        }
+        if (Test-Path -LiteralPath $createdStartMenuShortcut -PathType Leaf) {
+            if ((Get-ShortcutTarget $createdStartMenuShortcut) -ieq $targetExecutable) {
+                throw "$Name installer-owned Start Menu shortcut was not removed: $createdStartMenuShortcut"
             }
         }
         Assert-ShortcutSnapshotPreserved -Snapshot $InitialSnapshot -Stage "$Name uninstall"

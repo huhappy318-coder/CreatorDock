@@ -1,6 +1,15 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('./llmClient', () => ({
+  createLLMClient: () => ({
+    generateText: async () => 'OK',
+    streamText: async function* () { yield 'OK' },
+    testConnection: async () => ({ ok: true, latencyMs: 8 }),
+  }),
+}))
+
 import { AiWorkbench } from './aiWorkbench'
 
 describe('AI writing workbench', () => {
@@ -18,6 +27,8 @@ describe('AI writing workbench', () => {
     fireEvent.click(screen.getByRole('button', { name: '模型设置' }))
     const modelDialog = screen.getByRole('dialog', { name: '模型与连接' })
     expect(modelDialog).toBeInTheDocument()
+    expect(screen.getByText('首次只需三步：选模型、填 API Key、设置本机加密口令。接口和默认参数已预填；导出文件不会包含密钥。')).toBeInTheDocument()
+    expect(screen.getByText('高级参数（已预填）').closest('details')).not.toHaveAttribute('open')
     expect(screen.queryByRole('heading', { name: '写作风格与去 AI 味' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '写作 Skill' })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('本机解锁口令'), { target: { value: 'local-passphrase' } })
@@ -25,10 +36,10 @@ describe('AI writing workbench', () => {
     expect(screen.getByText('https://dashscope.aliyuncs.com/compatible-mode/v1')).toBeInTheDocument()
     expect(screen.getByText('qwen3.7-plus')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/API Key/), { target: { value: 'sk-ui-secret' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存模型' }))
+    fireEvent.click(screen.getByRole('button', { name: '测试并保存' }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '模型与连接' })).not.toBeInTheDocument(), { timeout: 5000 })
-    expect(screen.getByRole('status')).toHaveTextContent('模型已保存')
-    expect(screen.getByLabelText('模型连接状态')).toHaveTextContent('已保存，尚未验证连接')
+    expect(screen.getByRole('status')).toHaveTextContent('连接成功，模型已加密保存在本机并回到写作区')
+    expect(screen.getByLabelText('模型连接状态')).toHaveTextContent('上次连接成功 · 8 ms')
     expect(screen.queryByText('sk-ui-secret')).not.toBeInTheDocument()
     expect(localStorage.getItem('creatordock.ai.v1')).not.toContain('sk-ui-secret')
 

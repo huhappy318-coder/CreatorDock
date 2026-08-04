@@ -40,11 +40,19 @@ describe('AI writing conversation history', () => {
     await waitFor(() => expect(screen.getByText('这是生成结果')).toBeInTheDocument())
     expect(screen.getByLabelText('写作任务')).toHaveValue(task)
     expect(screen.getAllByText(task).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('草稿会自动保存在本机；新对话不会删除之前的写作记录。')).toBeInTheDocument()
 
     unmount()
     render(<AiWorkbench />)
     expect(screen.getAllByText(task).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('这是生成结果')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '清空记录' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '新对话' }))
+    expect(screen.getByLabelText('写作任务')).toHaveValue('')
+    expect(screen.getByRole('status')).toHaveTextContent('已开始新对话，之前的写作记录仍保留在本机')
+    expect(screen.getAllByText(task).length).toBeGreaterThanOrEqual(1)
+    expect(localStorage.getItem('creatordock.writing.history.v1')).toContain('这是生成结果')
 
     fireEvent.click(screen.getByRole('button', { name: '继续这条' }))
     expect(screen.getByLabelText('写作任务')).toHaveValue('这是生成结果')

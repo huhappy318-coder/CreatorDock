@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { browserWindowName, openBrowserEntryWindow, rememberBrowserWindow, BROWSER_WINDOW_STORAGE_KEY } from './browserWindows'
+import { browserWindowName, openBrowserEntryInNewWindow, openBrowserEntryWindow, rememberBrowserWindow, BROWSER_WINDOW_STORAGE_KEY } from './browserWindows'
 
 describe('browser entry windows', () => {
   it('uses a stable per-entry window name and focuses the popup', () => {
@@ -14,6 +14,14 @@ describe('browser entry windows', () => {
 
   it('keeps window names distinct when imported identifiers normalize to the same text', () => {
     expect(browserWindowName('账号/一')).not.toBe(browserWindowName('账号:一'))
+  })
+
+  it('uses a fresh browser target only when the user explicitly asks for a new window', () => {
+    const popup = { focus: vi.fn() } as unknown as Window
+    const open = vi.fn(() => popup)
+
+    expect(openBrowserEntryInNewWindow('https://example.com/new', open)).toBe(true)
+    expect(open).toHaveBeenCalledWith('https://example.com/new', '_blank', expect.stringContaining('popup'))
   })
 
   it('records the last opened destination without storing credentials', () => {

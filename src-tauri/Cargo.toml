@@ -1,6 +1,6 @@
 [package]
 name = "creator_dock"
-version = "0.1.0"
+version = "0.1.1"
 description = "CreatorDock desktop workbench"
 authors = ["CreatorDock contributors"]
 edition = "2021"

@@ -167,15 +167,40 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
     } finally { setRefreshingModels(false) }
   }
 
+  const testAndSaveModel = async () => {
+    if (!passphrase) throw new Error(tr('请先设置本机加密口令；口令不会保存。', 'Set a local encryption passphrase first; it is never saved.'))
+    if (!modelForm.apiKey.trim()) throw new Error(tr('请先填入 API Key，再测试并保存。', 'Enter the API key before testing and saving.'))
+    setTestingDraftModel(true)
+    try {
+      const temporaryConfig = await addModelProfile(createDefaultAiConfig(), modelForm, passphrase)
+      const temporaryModel = temporaryConfig.models[0]
+      if (!temporaryModel) throw new Error(tr('无法创建临时模型配置。', 'Unable to create a temporary model configuration.'))
+      const key = await unlockModelApiKey(temporaryModel, passphrase)
+      const result = await createLLMClient(temporaryModel, key).testConnection()
+      if (!result.ok) throw result.error
+
+      const next = await addModelProfile(config, modelForm, passphrase)
+      const savedModel = next.models.at(-1)
+      if (!savedModel) throw new Error(tr('模型保存后无法读取。', 'The saved model could not be read.'))
+      commit(next)
+      setSelectedModelId(savedModel.id)
+      updateModelConnectionCheck(savedModel.id, { status: 'succeeded', checkedAt: new Date().toISOString(), latencyMs: result.latencyMs })
+      setModelForm(emptyModel); setSelectedPresetId(defaultModelPreset.id); setActiveDialog(null)
+      setStatus(tr(`连接成功，模型已加密保存在本机并回到写作区（${result.latencyMs} ms）。`, `Connection succeeded. The model was encrypted on this device and you are back in writing (${result.latencyMs} ms).`))
+    } finally { setTestingDraftModel(false) }
+  }
+
   const submitModel = async (event: FormEvent) => {
     event.preventDefault(); clearMessage()
     try {
+      if (!editingModelId) {
+        await testAndSaveModel()
+        return
+      }
       if (!passphrase) throw new Error(tr('请先设置本机解锁口令；口令不会保存。', 'Set a local unlock passphrase first; it is never saved.'))
-      const next = editingModelId
-        ? await updateModelProfile(config, editingModelId, modelForm, passphrase)
-        : await addModelProfile(config, modelForm, passphrase)
+      const next = await updateModelProfile(config, editingModelId, modelForm, passphrase)
       commit(next)
-      if (editingModelId) updateModelConnectionCheck(editingModelId)
+      updateModelConnectionCheck(editingModelId)
       setSelectedModelId(next.defaultModelId ?? '')
       setModelForm(emptyModel); setSelectedPresetId(defaultModelPreset.id); setEditingModelId(undefined); setActiveDialog(null); setStatus(tr('模型已保存。API Key 只以加密形式留在本机。', 'Model saved. The API key remains encrypted on this device.'))
     } catch (caught) { setError(caught instanceof Error ? caught.message : tr('模型保存失败。', 'Model could not be saved.')) }
@@ -237,13 +262,10 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
     } finally { setTestingDraftModel(false) }
   }
 
-  const clearWritingHistory = () => {
-    try {
-      writingHistoryRef.current = []
-      setWritingHistory([])
-      saveWritingHistory(localStorage, [])
-      setStatus(tr('写作记录已清空。', 'Writing history cleared.'))
-    } catch (caught) { setError(caught instanceof Error ? caught.message : tr('写作记录保存失败。', 'Writing history could not be saved.')) }
+  const startNewWritingConversation = () => {
+    clearMessage()
+    updateWritingDraft('')
+    setStatus(tr('已开始新对话，之前的写作记录仍保留在本机。', 'New conversation started. Previous writing history remains on this device.'))
   }
 
   const continueWritingTurn = (turn: WritingTurn) => {
@@ -347,11 +369,13 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
           <div className="ai-grid ai-settings-grid">
         {activeDialog === 'model' && <section className="ai-panel model-panel" aria-labelledby="models-heading">
           <div className="panel-title"><h3 id="models-heading">{tr('模型与连接', 'Models and connection')}</h3><span>{config.models.length} {tr('个模型', 'models')}</span></div>
-          <p className="panel-help">{tr('API Key 只在保存时用本机口令加密；导出文件不会包含密钥。接口地址、模型 ID 和默认参数由模型预设自动带入。', 'The API key is encrypted with your local passphrase; exports never contain keys. The endpoint, model ID, and defaults come from the selected preset.')}</p>
-          <label className="ai-field">{tr('本机解锁口令', 'Local unlock passphrase')}<input type="password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder={tr('只在当前页面内存中使用', 'Used only in this page memory')} autoComplete="new-password" /></label>
+          <p className="panel-help">{tr('首次只需三步：选模型、填 API Key、设置本机加密口令。接口和默认参数已预填；导出文件不会包含密钥。', 'First-time setup takes three steps: choose a model, enter an API key, and set a local encryption passphrase. The endpoint and defaults are prefilled; exports never contain keys.')}</p>
           <form className="ai-form" onSubmit={submitModel}>
-            <label className="ai-field">{tr('模型选择', 'Choose a model')}<select aria-label={tr('模型选择', 'Choose a model')} value={selectedPresetId} onChange={(event) => { if (event.target.value === 'custom') { setSelectedPresetId('custom'); return }; const preset = modelChoices.find((item) => item.id === event.target.value); if (!preset) return; setSelectedPresetId(preset.id); setModelForm({ ...modelInputFromPreset(preset, modelForm.apiKey), enabled: modelForm.enabled ?? true }) }}><option value="" disabled>{tr('请选择模型预设', 'Choose a model preset')}</option>{modelChoices.map((preset) => <option value={preset.id} key={preset.id}>{preset.label}</option>)}<option value="custom">{tr('自定义型号', 'Custom model')}</option></select></label>
-            <div className="ai-preset-summary" aria-label={tr('模型预设参数', 'Preset parameters')}>
+            <label className="ai-field">{tr('1. 模型选择', '1. Choose a model')}<select aria-label={tr('模型选择', 'Choose a model')} value={selectedPresetId} onChange={(event) => { if (event.target.value === 'custom') { setSelectedPresetId('custom'); return }; const preset = modelChoices.find((item) => item.id === event.target.value); if (!preset) return; setSelectedPresetId(preset.id); setModelForm({ ...modelInputFromPreset(preset, modelForm.apiKey), enabled: modelForm.enabled ?? true }) }}><option value="" disabled>{tr('请选择模型预设', 'Choose a model preset')}</option>{modelChoices.map((preset) => <option value={preset.id} key={preset.id}>{preset.label}</option>)}<option value="custom">{tr('自定义型号', 'Custom model')}</option></select></label>
+            {selectedPresetId === 'custom' && <label className="ai-field">{tr('自定义模型 ID', 'Custom model ID')}<input value={modelForm.model} onChange={(event) => setModelForm({ ...modelForm, model: event.target.value, name: event.target.value || tr('自定义型号', 'Custom model') })} /></label>}
+            <label className="ai-field">{tr('2. API Key', '2. API Key')}{editingModelId && <small>{tr('留空表示保留已有密钥', 'Leave blank to keep the saved key')}</small>}<input type="password" value={modelForm.apiKey} onChange={(event) => setModelForm({ ...modelForm, apiKey: event.target.value })} placeholder={editingModelId ? tr('已保存（不回显）', 'Saved (hidden)') : tr('粘贴你自己的 Key', 'Paste your own key')} autoComplete="off" /></label>
+            <label className="ai-field">{tr(config.models.length === 0 ? '3. 首次本机加密口令' : '3. 本机解锁口令', config.models.length === 0 ? '3. First local encryption passphrase' : '3. Local unlock passphrase')}<input aria-label={tr('本机解锁口令', 'Local unlock passphrase')} aria-describedby="model-passphrase-help" type="password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder={tr('只在当前页面内存中使用', 'Used only in this page memory')} autoComplete="new-password" /></label><small id="model-passphrase-help" className="field-help">{tr('只在当前页面内存中使用，用于本机加密和解锁 API Key；不会上传或保存，请自行记住。', 'Used only in this page memory to encrypt and unlock the API key locally. It is never uploaded or saved, so keep it yourself.')}</small>
+            <details className="model-advanced-settings"><summary>{tr('高级参数（已预填）', 'Advanced parameters (prefilled)')}</summary><div className="ai-preset-summary" aria-label={tr('模型预设参数', 'Preset parameters')}>
               <div><span>{tr('模型名称', 'Model name')}</span><strong>{modelForm.name}</strong></div>
               <div><span>{tr('模型供应商', 'Provider')}</span><strong>{PROVIDER_OPTIONS.find((option) => option.id === modelForm.provider)?.label ?? modelForm.provider}</strong></div>
               <div><span>{tr('接口地址', 'Base URL')}</span><code>{modelForm.baseUrl}</code></div>
@@ -359,11 +383,8 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
               <div><span>{tr('默认温度', 'Default temperature')}</span><strong>{modelForm.temperature ?? '—'}</strong></div>
               <div><span>{tr('最大输出 Tokens', 'Max output tokens')}</span><strong>{modelForm.maxTokens ?? '—'}</strong></div>
               <div><span>{tr('输出方式', 'Output')}</span><strong>{modelForm.streaming ? tr('流式输出', 'Streaming') : tr('一次性输出', 'Complete response')}</strong></div>
-            </div>
-            {selectedPresetId === 'custom' && <label className="ai-field">{tr('自定义模型 ID', 'Custom model ID')}<input value={modelForm.model} onChange={(event) => setModelForm({ ...modelForm, model: event.target.value, name: event.target.value || tr('自定义型号', 'Custom model') })} /></label>}
-            <label className="ai-field">API Key{editingModelId && <small>{tr('留空表示保留已有密钥', 'Leave blank to keep the saved key')}</small>}<input type="password" value={modelForm.apiKey} onChange={(event) => setModelForm({ ...modelForm, apiKey: event.target.value })} placeholder={editingModelId ? tr('已保存（不回显）', 'Saved (hidden)') : tr('粘贴你自己的 Key', 'Paste your own key')} autoComplete="off" /></label>
-            <div className="model-refresh-row"><button type="button" onClick={() => void refreshModels()} disabled={refreshingModels || !modelForm.apiKey.trim()}>{refreshingModels ? tr('刷新中…', 'Refreshing…') : tr('从平台刷新型号', 'Refresh models from provider')}</button><small>{modelRefreshStatus || tr('只向当前接口地址发送 API Key，不经过 CreatorDock。', 'The key is sent only to this provider, never to CreatorDock.')}</small></div>
-            <div className="ai-actions"><button type="button" onClick={() => void testDraftModel()} disabled={testingDraftModel || !modelForm.apiKey.trim()}>{testingDraftModel ? tr('测试中…', 'Testing…') : tr('测试本次设置', 'Test these settings')}</button><button className="primary-action" type="submit">{editingModelId ? tr('更新模型', 'Update model') : tr('保存模型', 'Save model')}</button>{editingModelId && <button type="button" onClick={() => { setEditingModelId(undefined); setSelectedPresetId(defaultModelPreset.id); setModelForm(emptyModel) }}>{tr('取消编辑', 'Cancel edit')}</button>}</div>
+            </div><div className="model-refresh-row"><button type="button" onClick={() => void refreshModels()} disabled={refreshingModels || !modelForm.apiKey.trim()}>{refreshingModels ? tr('刷新中…', 'Refreshing…') : tr('从平台刷新型号', 'Refresh models from provider')}</button><small>{modelRefreshStatus || tr('只向当前接口地址发送 API Key，不经过 CreatorDock。', 'The key is sent only to this provider, never to CreatorDock.')}</small></div></details>
+            <div className="ai-actions"><button type="button" onClick={() => void testDraftModel()} disabled={testingDraftModel || !modelForm.apiKey.trim()}>{testingDraftModel ? tr('测试中…', 'Testing…') : tr('仅测试本次设置', 'Test settings only')}</button><button className="primary-action" type="submit" disabled={testingDraftModel}>{editingModelId ? tr('更新模型', 'Update model') : tr('测试并保存', 'Test and save')}</button>{editingModelId && <button type="button" onClick={() => { setEditingModelId(undefined); setSelectedPresetId(defaultModelPreset.id); setModelForm(emptyModel) }}>{tr('取消编辑', 'Cancel edit')}</button>}</div>
           </form>
           <div className="model-list">{config.models.map((model) => <article className={`model-card ${model.id === selectedModel?.id ? 'selected' : ''}`} key={model.id}><button type="button" className="model-select" onClick={() => setSelectedModelId(model.id)}><strong>{findModelPreset(model)?.label ?? model.name}{config.defaultModelId === model.id ? ` · ${tr('默认', 'default')}` : ''}</strong><span>{PROVIDER_OPTIONS.find((option) => option.id === model.provider)?.label ?? model.provider} · {model.model}</span><small>{model.encryptedApiKey ? tr('Key 已加密保存', 'Key encrypted') : tr('未保存 Key', 'Key not saved')}</small></button><div className="model-card-actions"><button type="button" onClick={() => commit(setDefaultModel(config, model.id))}>{config.defaultModelId === model.id ? tr('默认', 'Default') : tr('设为默认', 'Set default')}</button><button type="button" onClick={() => startEditModel(model.id)}>{tr('编辑', 'Edit')}</button><button type="button" onClick={() => { commit(deleteModelProfile(config, model.id)); updateModelConnectionCheck(model.id) }}>{tr('删除', 'Delete')}</button></div></article>)}</div>
           <div className="ai-actions"><button type="button" onClick={() => void testModel()} disabled={!selectedModel}>{tr('测试当前连接', 'Test connection')}</button><button type="button" onClick={() => downloadAiConfig(config)}>{tr('导出 AI 配置', 'Export AI config')}</button><button type="button" onClick={() => configFileInput.current?.click()}>{tr('导入 AI 配置', 'Import AI config')}</button><input ref={configFileInput} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void importConfigFile(event)} /></div>
@@ -386,22 +407,23 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
           <aside className="writing-setup-notice" aria-label={tr('模型连接状态', 'Model connection status')}>
             <strong>{tr('模型状态', 'Model status')}</strong>
             {!selectedModel
-              ? <span>{tr('未配置。选择模型、填入 API Key，测试后保存即可开始写作。', 'Unconfigured. Choose a model, enter an API key, test it, then save to start writing.')}</span>
+              ? <span>{tr('未配置：设置模型后即可开始写作。', 'Unconfigured: set up a model to start writing.')}</span>
               : selectedModelConnection?.status === 'succeeded'
                 ? <span>{tr(`上次连接成功${selectedModelConnection.latencyMs === undefined ? '' : ` · ${selectedModelConnection.latencyMs} ms`}`, `Last connection succeeded${selectedModelConnection.latencyMs === undefined ? '' : ` · ${selectedModelConnection.latencyMs} ms`}`)}</span>
                 : selectedModelConnection?.status === 'failed'
-                  ? <span>{tr('上次连接未通过，请检查口令、API Key 或接口地址。', 'The last connection test failed. Check the passphrase, API key, or endpoint.')}</span>
+                  ? <span>{tr('上次连接失败，请检查口令或 API Key。', 'The last connection failed. Check the passphrase or API key.')}</span>
                   : <span>{tr('已保存，尚未验证连接。', 'Saved, connection unverified.')}</span>}
             <button type="button" onClick={() => setActiveDialog('model')}>{selectedModel ? tr('测试连接', 'Test connection') : tr('去设置模型', 'Set up model')}</button>
           </aside>
           {writingHistory.length > 0 && <div className="writing-history" aria-label={tr('写作对话记录', 'Writing conversation history')}>
-            <div className="writing-history-heading"><strong>{tr('写作记录', 'Writing history')}</strong><button type="button" onClick={clearWritingHistory}>{tr('清空记录', 'Clear history')}</button></div>
+            <div className="writing-history-heading"><strong>{tr('写作记录', 'Writing history')}</strong><span>{tr('已保留在本机', 'Saved on this device')}</span></div>
             {writingHistory.map((turn) => <article className="writing-turn" key={turn.id}>
               <div className="writing-bubble user-bubble"><span>{tr('你', 'You')}</span><p>{turn.task}</p></div>
               <div className="writing-bubble assistant-bubble"><span>AI</span>{turn.status === 'generating' && !turn.output ? <p className="writing-pending">{tr('正在生成…', 'Generating…')}</p> : turn.status === 'interrupted' ? <p className="writing-error">{tr('上次生成已中断；你可以继续这条或删除记录。', 'The previous generation was interrupted. Continue or delete this record.')}</p> : turn.status === 'error' ? <p className="writing-error">{turn.error}</p> : <pre>{turn.output}</pre>}<div className="writing-turn-actions">{turn.output && <><button type="button" onClick={() => continueWritingTurn(turn)}>{tr('继续这条', 'Continue')}</button><button type="button" onClick={() => void copyWritingTurn(turn)}>{tr('复制', 'Copy')}</button></>}<button type="button" onClick={() => deleteWritingTurn(turn.id)}>{tr('删除', 'Delete')}</button></div></div>
             </article>)}
           </div>}
-          <label className="ai-field">{tr('写作任务', 'Writing task')}<textarea className="task-input" value={task} onChange={(event) => updateWritingDraft(event.target.value)} placeholder={tr('例如：把下面这段素材改成一篇自然口语的公众号开头……', 'e.g. Turn the material below into a natural, conversational newsletter opening…')} /></label>
+          <div className="writing-draft-heading"><strong>{tr('当前草稿', 'Current draft')}</strong><button type="button" onClick={startNewWritingConversation}>{tr('新对话', 'New conversation')}</button></div>
+          <label className="ai-field">{tr('写作任务', 'Writing task')}<textarea aria-describedby="writing-draft-status" className="task-input" value={task} onChange={(event) => updateWritingDraft(event.target.value)} placeholder={tr('例如：把下面这段素材改成一篇自然口语的公众号开头……', 'e.g. Turn the material below into a natural, conversational newsletter opening…')} /></label><small id="writing-draft-status" className="writing-draft-status">{tr('草稿会自动保存在本机；新对话不会删除之前的写作记录。', 'Drafts save automatically on this device; new conversations do not delete earlier writing history.')}</small>
           <button className="primary-action generate-button" type="button" onClick={() => void generate()} disabled={running}>{running ? tr('生成中…', 'Generating…') : tr('生成内容', 'Generate')}</button>
           <div className="ai-feature-actions"><button type="button" onClick={() => setActiveDialog('style')}>{tr('写作风格与去 AI 味', 'Writing style and humanization')}</button><button type="button" onClick={() => setActiveDialog('skill')}>{tr('写作 Skill', 'Writing Skill')}</button><button type="button" onClick={() => setWorkspace('cover')}>{tr('封面生成', 'Cover generation')}</button></div>
         </section>

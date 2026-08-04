@@ -16,6 +16,7 @@ import {
   createDefaultConfig,
   createShortcutExport,
   deleteLaunchEntry,
+  duplicateLaunchEntry,
   editLaunchEntry,
   exportConfig,
   filterLaunchEntries,
@@ -23,6 +24,7 @@ import {
   loadConfig,
   reorderLaunchEntry,
   saveConfig,
+  suggestDuplicateDisplayName,
   type BrowserTarget,
   type CreatorDockConfig,
   type DensitySetting,
@@ -34,7 +36,7 @@ import {
 import { platformLabel, translate } from './i18n'
 import './styles.css'
 import { AiWorkbench } from './aiWorkbench'
-import { browserWindowName, openBrowserEntryWindow, rememberBrowserWindow } from './browserWindows'
+import { browserWindowName, openBrowserEntryInNewWindow, openBrowserEntryWindow, rememberBrowserWindow } from './browserWindows'
 import {
   createDesktopAlias,
   getDesktopAliasStatus,
@@ -70,6 +72,8 @@ export function App() {
 
   const [query, setQuery] = useState('')
   const [editingEntry, setEditingEntry] = useState<LaunchEntry | null>()
+  const [copyingEntry, setCopyingEntry] = useState<LaunchEntry | null>(null)
+  const [entryMenuId, setEntryMenuId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<LaunchEntry | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [feedback, setFeedback] = useState<{ kind: 'error' | 'status', message: string } | null>(
@@ -176,7 +180,13 @@ export function App() {
     })
   }
 
-  const handleDestinationOpen = (event: ReactMouseEvent<HTMLAnchorElement>, url: string, entryId: string, displayName: string) => {
+  const handleDestinationOpen = (
+    event: ReactMouseEvent<HTMLAnchorElement>,
+    url: string,
+    entryId: string,
+    displayName: string,
+    mode: 'account' | 'new' = 'account',
+  ) => {
     if (desktopRuntime) {
       event.preventDefault()
       void openExternalUrl(url).catch(() => {
@@ -186,7 +196,7 @@ export function App() {
     }
     let opened = false
     try {
-      opened = openBrowserEntryWindow(url, entryId)
+      opened = mode === 'new' ? openBrowserEntryInNewWindow(url) : openBrowserEntryWindow(url, entryId)
     } catch {
       opened = false
     }
@@ -195,12 +205,14 @@ export function App() {
       return
     }
     event.preventDefault()
-    try {
-      rememberBrowserWindow(localStorage, { entryId, windowName: browserWindowName(entryId), url, lastOpenedAt: new Date().toISOString() })
-    } catch {
-      // The window already opened, so preserve the success state even if metadata cannot be stored.
+    if (mode === 'account') {
+      try {
+        rememberBrowserWindow(localStorage, { entryId, windowName: browserWindowName(entryId), url, lastOpenedAt: new Date().toISOString() })
+      } catch {
+        // The window already opened, so preserve the success state even if metadata cannot be stored.
+      }
     }
-    setFeedback({ kind: 'status', message: `${displayName} · ${t('destinationOpenedInWindow')}` })
+    setFeedback({ kind: 'status', message: `${displayName} · ${t(mode === 'new' ? 'destinationOpenedInNewWindow' : 'destinationOpenedInWindow')}` })
   }
 
   const toggleDesktopAlias = async () => {
@@ -260,19 +272,33 @@ export function App() {
 
   const openAdd = (button: HTMLButtonElement) => {
     returnFocus.current = button
+    setCopyingEntry(null)
     setEditingEntry(null)
   }
 
   const closeEditor = () => {
     returnFocus.current?.focus()
+    setCopyingEntry(null)
     setEditingEntry(undefined)
   }
 
   const saveEntry = (value: NewLaunchEntry) => {
-    commitConfig(editingEntry
-      ? editLaunchEntry(config, editingEntry.id, value)
-      : addLaunchEntry(config, value))
+    commitConfig(copyingEntry
+      ? duplicateLaunchEntry(config, copyingEntry.id, value)
+      : editingEntry
+        ? editLaunchEntry(config, editingEntry.id, value)
+        : addLaunchEntry(config, value))
     closeEditor()
+  }
+
+  const copyEntry = (entry: LaunchEntry, button: HTMLButtonElement) => {
+    returnFocus.current = button
+    setEntryMenuId(null)
+    setCopyingEntry(entry)
+    setEditingEntry({
+      ...entry,
+      displayName: suggestDuplicateDisplayName(config, entry.id, t('copyNameSuffix')),
+    })
   }
 
   const moveEntry = (id: string, destinationIndex: number) => {
@@ -414,10 +440,13 @@ export function App() {
                   canMoveLater={visibleIndex < visibleEntries.length - 1}
                   onDelete={(button) => {
                     returnFocus.current = button
+                    setEntryMenuId(null)
                     setDeleteTarget(item)
                   }}
                   onEdit={(button) => {
                     returnFocus.current = button
+                    setCopyingEntry(null)
+                    setEntryMenuId(null)
                     setEditingEntry(item)
                   }}
                   onEditButton={(button) => {
@@ -427,7 +456,16 @@ export function App() {
                   onMove={moveEntry}
                   onMoveEarlier={() => moveVisibleEntry(item.id, -1)}
                   onMoveLater={() => moveVisibleEntry(item.id, 1)}
+                  menuOpen={entryMenuId === item.id}
+                  onMenuClose={() => setEntryMenuId(null)}
+                  onMenuToggle={() => setEntryMenuId((current) => current === item.id ? null : item.id)}
+                  onCopy={(button) => copyEntry(item, button)}
                   onOpen={handleDestinationOpen}
+                  onOpenNew={(event) => {
+                    setEntryMenuId(null)
+                    handleDestinationOpen(event, item.destinationUrl, item.id, item.displayName, 'new')
+                  }}
+                  allowNewWindow={!desktopRuntime}
                   language={config.language}
                 />
               ))}
@@ -447,7 +485,7 @@ export function App() {
         </section>
       )}
       {editingEntry !== undefined && (
-        <EntryDialog entry={editingEntry} onClose={closeEditor} onSave={saveEntry} language={config.language} />
+        <EntryDialog entry={editingEntry} isDuplicate={copyingEntry !== null} onClose={closeEditor} onSave={saveEntry} language={config.language} />
       )}
       {deleteTarget && (
         <ConfirmDialog
@@ -505,6 +543,12 @@ function DestinationCard({
   onMoveEarlier,
   onMoveLater,
   onOpen,
+  onOpenNew,
+  onCopy,
+  onMenuClose,
+  onMenuToggle,
+  menuOpen,
+  allowNewWindow,
   language,
 }: {
   entry: LaunchEntry
@@ -518,6 +562,12 @@ function DestinationCard({
   onMoveEarlier: () => void
   onMoveLater: () => void
   onOpen: (event: ReactMouseEvent<HTMLAnchorElement>, url: string, entryId: string, displayName: string) => void
+  onOpenNew: (event: ReactMouseEvent<HTMLAnchorElement>) => void
+  onCopy: (button: HTMLButtonElement) => void
+  onMenuClose: () => void
+  onMenuToggle: () => void
+  menuOpen: boolean
+  allowNewWindow: boolean
   language: LanguageSetting
 }) {
   const preset = entry.platformPresetId ? presetById.get(entry.platformPresetId) : undefined
@@ -574,6 +624,38 @@ function DestinationCard({
           {translate(language, 'edit')}
         </button>
         <button type="button" aria-label={`${translate(language, 'delete')} ${entry.displayName}`} onClick={(event) => onDelete(event.currentTarget)}>{translate(language, 'delete')}</button>
+        <div
+          className="card-menu-wrap"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onMenuClose()
+          }}
+        >
+          <button
+            type="button"
+            aria-label={translate(language, 'moreDestinationActions', { name: entry.displayName })}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            onClick={onMenuToggle}
+          >
+            ⋯
+          </button>
+          {menuOpen && (
+            <div className="card-menu" role="menu">
+              <button type="button" role="menuitem" onClick={(event) => onCopy(event.currentTarget)}>{translate(language, 'copyDestination')}</button>
+              {allowNewWindow && (
+                <a
+                  href={entry.destinationUrl}
+                  rel="noopener noreferrer"
+                  role="menuitem"
+                  target="_blank"
+                  onClick={onOpenNew}
+                >
+                  {translate(language, 'openInNewWindow')}
+                </a>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </article>
   )
@@ -581,11 +663,13 @@ function DestinationCard({
 
 function EntryDialog({
   entry,
+  isDuplicate,
   onClose,
   onSave,
   language,
 }: {
   entry: LaunchEntry | null
+  isDuplicate: boolean
   onClose: () => void
   onSave: (value: NewLaunchEntry) => void
   language: LanguageSetting
@@ -601,7 +685,7 @@ function EntryDialog({
   const [createShortcut, setCreateShortcut] = useState(entry?.createShortcut ?? false)
   const [error, setError] = useState('')
   const firstField = useRef<HTMLInputElement>(null)
-  const title = entry ? translate(language, 'editDestination') : translate(language, 'addDestination')
+  const title = isDuplicate ? translate(language, 'copyDestination') : entry ? translate(language, 'editDestination') : translate(language, 'addDestination')
 
   useEffect(() => {
     firstField.current?.focus()
