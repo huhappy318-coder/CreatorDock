@@ -67,3 +67,29 @@
 - `promotion_candidate: true`
 - `promoted_to: pending`
 - `last_reviewed: 2026-08-01`
+
+## creator-dock-small-friction-fixes-2026-08-04
+
+- `status: verified`
+- `observed_at: 2026-08-04`
+- `scope: CreatorDock model setup, writing history, and browser entry launch`
+- Trigger: 用户反馈模型保存和测试缺少明确反馈，生成后输入内容消失，浏览器入口既没有独立窗口体验也无法说明其持久化边界。
+- Observation: 模型表单现在可在保存前用临时内存配置测试当前 API Key，不写入 localStorage；写作任务和生成结果保存在本机，刷新后仍可查看、继续或删除，未完成请求恢复为“已中断”；浏览器入口使用稳定命名的独立窗口，弹窗被拦截时保留链接的正常新标签页回退。浏览器完全退出后只能保存入口记录，不能恢复第三方网站的真实窗口或登录状态。
+- Evidence: `npm run typecheck` passed; `npm test` passed with 21 files and 109 tests; `npm run build`, `npm run check:dist`, and `npm run test:e2e` passed with 8 browser checks on 2026-08-04. The refreshed Windows NSIS bundle compiled successfully; clean-user install/uninstall lifecycle verification remains separate.
+- Reusable rule: 对需要用户提供密钥的首次接入，先允许不落盘测试，再要求显式保存；将“会话记录持久化”和“恢复第三方浏览器窗口”明确拆分，前者可由本地存储实现，后者受浏览器安全模型限制。
+- `promotion_candidate: true`
+- `promoted_to: pending`
+- `last_reviewed: 2026-08-04`
+
+## creator-dock-offline-and-macos-alias-onboarding-2026-08-04
+
+- `status: verified`
+- `observed_at: 2026-08-04`
+- `scope: CreatorDock PWA verification and macOS desktop onboarding`
+- Trigger: release audit found that the PWA shell had only static cache evidence and the macOS desktop alias could only be discovered inside collapsed Preferences.
+- Observation: the PWA browser test now allows a Service Worker only in its isolated spec, waits until it controls the page, disconnects the browser context, and confirms that the CreatorDock shell is served offline. macOS desktop launches now show a one-time, non-blocking Create desktop alias / Not now prompt only when no owned alias exists; the handled flag stays in the existing Tauri Store and Preferences keeps the later create/remove control.
+- Evidence: `npm run test:e2e` passed 9 browser checks on 2026-08-04, including an offline response served by the Service Worker; `npm run typecheck` and the focused desktop/main tests passed. The actual macOS symlink and permission behavior still require macOS CI or a real Mac.
+- Reusable rule: prove offline behavior with an activated Service Worker and an actually offline reload, not only generated Workbox files. For optional operating-system onboarding, persist a decision outside the shared product schema and keep the setting reachable after the one-time prompt.
+- `promotion_candidate: true`
+- `promoted_to: pending`
+- `last_reviewed: 2026-08-04`

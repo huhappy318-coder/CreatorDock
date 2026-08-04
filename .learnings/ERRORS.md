@@ -135,3 +135,18 @@
 - `promotion_candidate: false`
 - `promoted_to: pending`
 - `last_reviewed: 2026-08-01`
+
+## creator-dock-ai-draft-crypto-timeout-2026-08-04
+
+- `status: verified`
+- `observed_at: 2026-08-04`
+- `scope: CreatorDock AI model setup component test`
+- Trigger: the full Vitest run executed the first-model draft connection test beside other PBKDF2 encryption tests.
+- Observation: the focused test passed, but the full suite timed out at Testing before the success status rendered; the test DOM showed the temporary connection action still disabled rather than an incorrect result.
+- Root cause: the test exercises real local encrypt and unlock operations, so the default one-second Testing Library wait was shorter than the contended cryptographic path.
+- Recovery: give only the asynchronous crypto-flow assertions a 10-second timeout while retaining the same success, encryption, and no-secret assertions.
+- Evidence: the first full `npm test` failed in `src/aiDraftModel.test.tsx`; after the timeout adjustment, `npm test` passed 21 files and 109 tests on 2026-08-04. A later full-suite run reproduced the same contention in four real-crypto/UI tests while each focused file passed. Setting Vitest `fileParallelism: false` kept all assertions intact and made the default `npm test` pass 21 files and 110 tests on 2026-08-04.
+- Reusable rule: when a component test intentionally executes real key derivation, distinguish an unfinished async operation from a wrong UI state and use a bounded timeout appropriate for the measured full-suite path. If independent focused tests pass but the parallel suite does not, serialize test files rather than weakening assertions or bypassing encryption.
+- `promotion_candidate: false`
+- `promoted_to: pending`
+- `last_reviewed: 2026-08-04`

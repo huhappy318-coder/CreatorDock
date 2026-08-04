@@ -26,4 +26,11 @@ describe('cover configuration', () => {
     expect(edited.profiles[0].name).toBe('改名')
     expect(edited.profiles[0].encryptedApiKey).toEqual(config.profiles[0].encryptedApiKey)
   })
+
+  it('rejects credential-bearing cover endpoints', async () => {
+    await expect(addCoverProfile(createDefaultCoverConfig(), { name: '不安全', provider: 'custom', endpoint: 'https://user:pass@images.example.test/generate', model: 'img', apiKey: 'x' }, 'p')).rejects.toThrow(/HTTPS/)
+    const saved = storage()
+    saved.setItem('creatordock.cover.v1', JSON.stringify({ schemaVersion: 1, profiles: [{ id: 'unsafe', name: '不安全', provider: 'custom', endpoint: 'https://user:pass@images.example.test/generate', model: 'img', enabled: true }] }))
+    expect(loadCoverConfig(saved)).toMatchObject({ recovered: true, config: { profiles: [] } })
+  })
 })

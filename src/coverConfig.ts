@@ -127,5 +127,10 @@ function parseCoverProfile(value: unknown): CoverProfile {
   return { id: profile.id, name: profile.name.trim(), provider: profile.provider as CoverProviderKind, endpoint: profile.endpoint.replace(/\/+$/, ''), model: profile.model.trim(), ...(isEncryptedSecret(profile.encryptedApiKey) ? { encryptedApiKey: profile.encryptedApiKey } : {}), enabled: profile.enabled !== false }
 }
 
-function isHttpUrl(value: string): boolean { try { const url = new URL(value); return url.protocol === 'http:' || url.protocol === 'https:' } catch { return false } }
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password
+  } catch { return false }
+}
 function isEncryptedSecret(value: unknown): value is EncryptedSecret { return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>).version === 1 && (value as Record<string, unknown>).algorithm === 'AES-GCM' && typeof (value as Record<string, unknown>).ciphertext === 'string' && typeof (value as Record<string, unknown>).salt === 'string' && typeof (value as Record<string, unknown>).iv === 'string') }

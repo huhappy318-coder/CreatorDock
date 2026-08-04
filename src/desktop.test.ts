@@ -1,6 +1,6 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
-import { clampWindowState, getDefaultWindowState, getLeftFloatingWindowState, isTauriRuntime, openExternalUrl } from './desktop'
+import { clampWindowState, getDefaultWindowState, getLeftFloatingWindowState, isTauriRuntime, openExternalUrl, shouldOfferMacDesktopAlias } from './desktop'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -51,5 +51,12 @@ describe('desktop bridge', () => {
     Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} })
     await expect(openExternalUrl('https://example.com/creator')).resolves.toBe(true)
     expect(invoke).toHaveBeenCalledWith('open_external', { url: 'https://example.com/creator' })
+  })
+
+  it('offers the macOS desktop alias only once its status and onboarding flag are known', () => {
+    expect(shouldOfferMacDesktopAlias('macos', { exists: false }, false)).toBe(true)
+    expect(shouldOfferMacDesktopAlias('macos', { exists: true }, false)).toBe(false)
+    expect(shouldOfferMacDesktopAlias('windows', { exists: false }, false)).toBe(false)
+    expect(shouldOfferMacDesktopAlias('macos', { exists: false }, null)).toBe(false)
   })
 })

@@ -26,10 +26,11 @@ describe('AI writing workbench', () => {
     expect(screen.getByText('qwen3.7-plus')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/API Key/), { target: { value: 'sk-ui-secret' } })
     fireEvent.click(screen.getByRole('button', { name: '保存模型' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: /通义千问 3\.7 Plus/ })).toBeInTheDocument(), { timeout: 5000 })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '模型与连接' })).not.toBeInTheDocument(), { timeout: 5000 })
+    expect(screen.getByRole('status')).toHaveTextContent('模型已保存')
+    expect(screen.getByLabelText('模型连接状态')).toHaveTextContent('已保存，尚未验证连接')
     expect(screen.queryByText('sk-ui-secret')).not.toBeInTheDocument()
     expect(localStorage.getItem('creatordock.ai.v1')).not.toContain('sk-ui-secret')
-    fireEvent.click(screen.getByRole('button', { name: '关闭模型设置' }))
 
     fireEvent.click(screen.getByRole('button', { name: '写作风格与去 AI 味' }))
     expect(screen.getByRole('dialog', { name: '写作风格与去 AI 味' })).toBeInTheDocument()
@@ -69,5 +70,11 @@ describe('AI writing workbench', () => {
     fireEvent.click(screen.getByRole('button', { name: '关闭封面设置' }))
     fireEvent.click(screen.getByRole('button', { name: '回到写作' }))
     expect(screen.getByRole('heading', { name: 'AI 写作', level: 2 })).toBeInTheDocument()
+  })
+
+  it('keeps the main model connection state available in English', () => {
+    render(<AiWorkbench language="en" />)
+    expect(screen.getByLabelText('Model connection status')).toHaveTextContent('Unconfigured')
+    expect(screen.getByRole('button', { name: 'Set up model' })).toBeInTheDocument()
   })
 })

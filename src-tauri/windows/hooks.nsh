@@ -29,59 +29,108 @@
   ; are used; the Tauri Store and WebView local storage remain untouched.
   RmDir /r "$LOCALAPPDATA\com.creatordock.desktop\EBWebView\Default\Service Worker"
 
-  ; Tauri's default template writes CreatorDock.lnk. Temporarily hold an
-  ; unrelated link inside the installer directory, then restore it after the
-  ; new CreatorDock link has been moved to a suffix name.
-  InitPluginsDir
-  StrCpy $1 "$DESKTOP\CreatorDock.lnk"
-  IfFileExists "$1" 0 creatordock_preinstall_done
-  !insertmacro CreatorDock_IsShortcutTargetIgnoreCase "$1" "$INSTDIR\creator_dock.exe" creatordock_preinstall_check
-  Pop $0
-  ${If} $0 = 1
-    Goto creatordock_preinstall_done
-  ${EndIf}
-  Rename "$1" "$PLUGINSDIR\CreatorDock-existing.lnk"
-creatordock_preinstall_done:
+  ; Tauri creates Start Menu and Desktop links after this hook for /S and /P.
+  ; Claim those links here so the post-install hook can create only links that
+  ; belong to CreatorDock, without overwriting an unrelated same-name link.
+  StrCpy $NoShortcutMode 1
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  IfFileExists "$PLUGINSDIR\CreatorDock-existing.lnk" 0 creator_dock_record_default
-  IfFileExists "$DESKTOP\CreatorDock.lnk" creator_dock_find_registered creator_dock_create_default
-
-creator_dock_create_default:
-  CreateShortCut "$DESKTOP\CreatorDock.lnk" "$INSTDIR\creator_dock.exe" "" "$INSTDIR\creator_dock.exe" 0 SW_SHOWNORMAL
-
 creator_dock_find_registered:
+  ; An earlier CreatorDock install may already own a suffixed Desktop link
+  ; because another application owned CreatorDock.lnk. Keep that existing
+  ; app-owned link across upgrades instead of making another one.
   ReadRegStr $2 HKCU "Software\CreatorDock" "DesktopShortcut"
   ${If} $2 != ""
-    IfFileExists "$2" 0 creator_dock_find_suffix_start
+    IfFileExists "$2" 0 creator_dock_check_primary
     !insertmacro CreatorDock_IsShortcutTargetIgnoreCase "$2" "$INSTDIR\creator_dock.exe" creatordock_postinstall_check
     Pop $8
     ${If} $8 = 1
-      Delete "$2"
-      Goto creator_dock_move_new_shortcut
+      Goto creator_dock_record_shortcut
     ${EndIf}
+  ${EndIf}
+
+  ; If the primary name is ours, this is a normal update. Never overwrite an
+  ; unrelated CreatorDock.lnk: create a new numbered link instead.
+  IfFileExists "$DESKTOP\CreatorDock.lnk" creator_dock_check_primary creator_dock_create_primary
+
+creator_dock_check_primary:
+  !insertmacro CreatorDock_IsShortcutTargetIgnoreCase "$DESKTOP\CreatorDock.lnk" "$INSTDIR\creator_dock.exe" creatordock_primary_check
+  Pop $8
+  ${If} $8 = 1
+    StrCpy $2 "$DESKTOP\CreatorDock.lnk"
+    Goto creator_dock_record_shortcut
   ${EndIf}
 
 creator_dock_find_suffix_start:
   StrCpy $1 2
 creator_dock_find_suffix:
   StrCpy $2 "$DESKTOP\CreatorDock ($1).lnk"
-  IfFileExists "$2" 0 creator_dock_move_new_shortcut
+  IfFileExists "$2" 0 creator_dock_create_suffix
   IntOp $1 $1 + 1
   Goto creator_dock_find_suffix
 
-creator_dock_move_new_shortcut:
-  Rename "$DESKTOP\CreatorDock.lnk" "$2"
-  Rename "$PLUGINSDIR\CreatorDock-existing.lnk" "$DESKTOP\CreatorDock.lnk"
-  WriteRegStr HKCU "Software\CreatorDock" "DesktopShortcut" "$2"
-  Goto creator_dock_postinstall_done
+creator_dock_create_suffix:
+  CreateShortCut "$2" "$INSTDIR\creator_dock.exe" "" "$INSTDIR\creator_dock.exe" 0 SW_SHOWNORMAL
+  !insertmacro SetLnkAppUserModelId "$2"
+  Goto creator_dock_record_shortcut
 
-creator_dock_record_default:
+creator_dock_create_primary:
+  CreateShortCut "$DESKTOP\CreatorDock.lnk" "$INSTDIR\creator_dock.exe" "" "$INSTDIR\creator_dock.exe" 0 SW_SHOWNORMAL
   StrCpy $2 "$DESKTOP\CreatorDock.lnk"
+  !insertmacro SetLnkAppUserModelId "$2"
 creator_dock_record_shortcut:
   WriteRegStr HKCU "Software\CreatorDock" "DesktopShortcut" "$2"
+  Goto creator_dock_start_menu_find_registered
+
+creator_dock_start_menu_find_registered:
+  ; Tauri's configured start-menu location is CreatorDock\CreatorDock.lnk.
+  ; Keep a registered CreatorDock-owned suffix across upgrades.
+  ReadRegStr $3 HKCU "Software\CreatorDock" "StartMenuShortcut"
+  ${If} $3 != ""
+    IfFileExists "$3" 0 creator_dock_start_menu_check_primary
+    !insertmacro CreatorDock_IsShortcutTargetIgnoreCase "$3" "$INSTDIR\creator_dock.exe" creatordock_start_menu_registered_check
+    Pop $8
+    ${If} $8 = 1
+      Goto creator_dock_start_menu_record_shortcut
+    ${EndIf}
+  ${EndIf}
+
+creator_dock_start_menu_check_primary:
+  StrCpy $3 "$SMPROGRAMS\CreatorDock\CreatorDock.lnk"
+  IfFileExists "$3" creator_dock_start_menu_primary_exists creator_dock_start_menu_create_primary
+
+creator_dock_start_menu_primary_exists:
+  !insertmacro CreatorDock_IsShortcutTargetIgnoreCase "$3" "$INSTDIR\creator_dock.exe" creatordock_start_menu_primary_check
+  Pop $8
+  ${If} $8 = 1
+    Goto creator_dock_start_menu_record_shortcut
+  ${EndIf}
+
+creator_dock_start_menu_find_suffix_start:
+  StrCpy $1 2
+creator_dock_start_menu_find_suffix:
+  StrCpy $3 "$SMPROGRAMS\CreatorDock\CreatorDock ($1).lnk"
+  IfFileExists "$3" 0 creator_dock_start_menu_create_suffix
+  IntOp $1 $1 + 1
+  Goto creator_dock_start_menu_find_suffix
+
+creator_dock_start_menu_create_suffix:
+  CreateDirectory "$SMPROGRAMS\CreatorDock"
+  CreateShortCut "$3" "$INSTDIR\creator_dock.exe" "" "$INSTDIR\creator_dock.exe" 0 SW_SHOWNORMAL
+  !insertmacro SetLnkAppUserModelId "$3"
+  Goto creator_dock_start_menu_record_shortcut
+
+creator_dock_start_menu_create_primary:
+  CreateDirectory "$SMPROGRAMS\CreatorDock"
+  CreateShortCut "$3" "$INSTDIR\creator_dock.exe" "" "$INSTDIR\creator_dock.exe" 0 SW_SHOWNORMAL
+  !insertmacro SetLnkAppUserModelId "$3"
+creator_dock_start_menu_record_shortcut:
+  WriteRegStr HKCU "Software\CreatorDock" "StartMenuShortcut" "$3"
 creator_dock_postinstall_done:
+  ; The pre-install hook suppressed Tauri's default shortcut paths. Keep this
+  ; set for the interactive finish-page callback as well.
+  StrCpy $NoShortcutMode 1
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
@@ -95,5 +144,19 @@ creator_dock_postinstall_done:
     ${EndIf}
   creatordock_uninstall_registry_cleanup:
     DeleteRegValue HKCU "Software\CreatorDock" "DesktopShortcut"
+  ${EndIf}
+
+  ReadRegStr $3 HKCU "Software\CreatorDock" "StartMenuShortcut"
+  ${If} $3 != ""
+    IfFileExists "$3" 0 creatordock_uninstall_start_menu_registry_cleanup
+    !insertmacro CreatorDock_IsShortcutTargetIgnoreCase "$3" "$INSTDIR\creator_dock.exe" creatordock_uninstall_start_menu_check
+    Pop $8
+    ${If} $8 = 1
+      Delete "$3"
+    ${EndIf}
+  creatordock_uninstall_start_menu_registry_cleanup:
+    DeleteRegValue HKCU "Software\CreatorDock" "StartMenuShortcut"
+    ; Only removes the CreatorDock folder when no external entries remain.
+    RMDir "$SMPROGRAMS\CreatorDock"
   ${EndIf}
 !macroend

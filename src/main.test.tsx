@@ -8,6 +8,7 @@ import {
   type CreatorDockConfig,
   type LaunchEntry,
 } from './config'
+import { browserWindowName } from './browserWindows'
 import { App } from './main'
 
 const entry = (overrides: Partial<LaunchEntry> = {}): LaunchEntry => ({
@@ -84,6 +85,28 @@ describe('catalog discovery', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     expect(link).not.toHaveTextContent(unverified.verificationNote!)
     expect(link.querySelector('img')).toHaveAttribute('src', unverified.iconSrc)
+  })
+
+  it('opens each destination in a stable named browser window and records it locally', () => {
+    seed(config([entry({ id: 'wechat-one', displayName: '公众号·账号一' })]))
+    const open = vi.spyOn(window, 'open').mockImplementation(() => ({ focus: vi.fn() } as unknown as Window))
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('link', { name: /公众号·账号一/ }))
+
+    expect(open).toHaveBeenCalledWith('https://example.com/studio', browserWindowName('wechat-one'), expect.stringContaining('popup'))
+    expect(localStorage.getItem('creatordock.browser.windows.v1')).toContain('wechat-one')
+  })
+
+  it('falls back to the normal new-tab link when a browser blocks the separate window', () => {
+    seed(config([entry({ id: 'fallback-entry', displayName: 'Fallback account' })]))
+    vi.spyOn(window, 'open').mockImplementation(() => null)
+    render(<App />)
+
+    const openedNormally = fireEvent.click(screen.getByRole('link', { name: /Fallback account/ }))
+
+    expect(openedNormally).toBe(true)
+    expect(screen.getByRole('status')).toHaveTextContent('browser blocked a separate window')
   })
 })
 

@@ -1,5 +1,13 @@
 # CreatorDock
 
+![CreatorDock 主界面](docs/images/creatordock-overview.png)
+
+> 中文优先的创作者工作台：集中管理平台入口，在右侧完成 AI 写作与封面生成；账号名称、密钥和配置只保存在本机。
+
+[快速安装与使用](REMIND.md) · [查看可用桌面安装包（GitHub Releases）](https://github.com/huhappy318-coder/CreatorDock/releases)
+
+> 提示：只有 Releases 页面实际出现附件时，才表示对应系统的安装包已经发布；没有附件时可按下方“从源码运行”使用项目。
+
 [中文](#中文) · [English](#english)
 
 CreatorDock is a local-first, installable launchpad for creators who manage
@@ -72,7 +80,7 @@ PWA 只缓存 CreatorDock 应用壳；外部创作平台不会被离线缓存。
 GitHub Releases 会按操作系统提供安装包：
 
 - Windows 下载 NSIS `.exe`。安装结束后会自动在当前用户桌面创建 `CreatorDock.lnk`；如果同名文件属于其他程序，安装器会使用带后缀的名称。
-- macOS 下载通用架构 `.dmg`，将 CreatorDock 拖入“应用程序”。首次打开后可以在“偏好设置”中创建或移除桌面别名。
+- macOS 下载通用架构 `.dmg`，将 CreatorDock 拖入“应用程序”。首次打开会提示是否创建桌面别名；之后仍可在“偏好设置”中创建或移除。
 - v1 未签名，Windows SmartScreen 或 macOS Gatekeeper 可能显示安全提示；这是发行边界，不要下载来路不明的替代文件。
 
 本地构建桌面壳需要 Rust、Windows MSVC Build Tools（Windows）或 Xcode Command Line Tools（macOS）：
@@ -244,8 +252,9 @@ GitHub Releases provides one installer per operating system:
 - Windows: download the NSIS `.exe`. The installer creates `CreatorDock.lnk`
   on the current user's Desktop. If that name belongs to another file, it uses
   a suffixed name instead of overwriting it.
-- macOS: download the universal `.dmg`, drag CreatorDock to Applications, then
-  create or remove the optional Desktop alias from Preferences.
+- macOS: download the universal `.dmg` and drag CreatorDock to Applications.
+  The first launch offers to create an optional Desktop alias; Preferences keeps
+  the create/remove control available later.
 - v1 packages are unsigned, so SmartScreen or Gatekeeper may show a warning.
   This is expected for this release and is not a reason to download alternate
   binaries.

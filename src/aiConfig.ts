@@ -108,11 +108,11 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
   { id: 'glm-5.2', label: '智谱 GLM 5.2', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.2', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
   { id: 'kimi-k2.5', label: 'Kimi K2.5', provider: 'moonshot', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.5', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
   { id: 'minimax-m2.7', label: 'MiniMax M2.7', provider: 'minimax', baseUrl: 'https://api.minimaxi.com/v1', model: 'MiniMax-M2.7', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
-  { id: 'openai-gpt-5.1', label: 'OpenAI GPT-5.1', provider: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.1', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'openai-gpt-5.2', label: 'OpenAI GPT-5.2', provider: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.2', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
   { id: 'openai-gpt-5-mini', label: 'OpenAI GPT-5 mini（快速）', provider: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5-mini', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
   { id: 'gemini-3.6-flash', label: 'Google Gemini 3.6 Flash', provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3.6-flash', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
   { id: 'gemini-3.5-flash', label: 'Google Gemini 3.5 Flash', provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3.5-flash', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
-  { id: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash-Lite（快速）', provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3.1-flash-lite', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
+  { id: 'gemini-3.5-flash-lite', label: 'Google Gemini 3.5 Flash-Lite（快速）', provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3.5-flash-lite', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
   { id: 'claude-sonnet-4', label: 'Claude Sonnet 4', provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-0', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
   { id: 'claude-opus-4', label: 'Claude Opus 4', provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-opus-4-0', temperature: 0.7, maxTokens: 8192, streaming: true, imageGeneration: false },
 ]
@@ -250,7 +250,12 @@ function normalizeModelInput(input: ModelProfileInput): Omit<ModelProfile, 'id' 
 }
 
 function toModelInput(model: ModelProfile): ModelProfileInput { return { name: model.name, provider: model.provider, baseUrl: model.baseUrl, model: model.model, apiKey: '', temperature: model.temperature, maxTokens: model.maxTokens, streaming: model.streaming, imageGeneration: model.imageGeneration, enabled: model.enabled } }
-function isHttpUrl(value: string): boolean { try { const url = new URL(value); return url.protocol === 'http:' || url.protocol === 'https:' } catch { return false } }
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password
+  } catch { return false }
+}
 
 function parseAiConfig(value: unknown): AiConfig {
   if (!value || typeof value !== 'object') throw new Error('AI configuration must be an object.')

@@ -2,6 +2,14 @@
 
 ![CreatorDock 主界面](docs/images/creatordock-overview.png)
 
+## 快速安装
+
+1. 打开 [GitHub Releases](https://github.com/huhappy318-coder/CreatorDock/releases)，确认页面已有适合你系统的安装附件。
+2. Windows 下载 `CreatorDock_*_x64-setup.exe` 并双击安装；macOS 下载 `.dmg`，将应用拖入“应用程序”。
+3. 从桌面或“应用程序”启动 CreatorDock。首次使用请在“模型设置”中设置本机解锁口令、选择模型并填入自己的 API Key。
+
+> Releases 页面尚无附件时，说明公开安装包还未发布；请不要下载来源不明的同名文件，可先按本文末尾的源码方式运行。
+
 CreatorDock 是一个中文优先的创作者工作台：左侧管理常用平台入口，右侧进行 AI 写作和封面生成。
 
 ## 项目简介
@@ -31,7 +39,7 @@ CreatorDock is a local-first, installable launchpad for creators who manage mult
 
 1. 在 **Releases** 下载 `.dmg` 文件。
 2. 打开后把 CreatorDock 拖到“应用程序”。
-3. 从“应用程序”启动；如系统提示未验证开发者，请在系统设置中确认打开。
+3. 从“应用程序”启动；首次打开可按提示创建桌面别名。如系统提示未验证开发者，请在系统设置中确认打开。
 
 ## 基本使用
 
@@ -39,7 +47,7 @@ CreatorDock is a local-first, installable launchpad for creators who manage mult
 2. 点击任意卡片即可在系统浏览器打开对应的官方创作页或平台入口。
 3. 使用顶部搜索框查找入口；点击“添加入口”可以增加平台或自定义网址。
 4. 卡片底部可以上移、下移、编辑或删除入口。
-5. 右侧“AI 写作”中输入写作任务，点击“生成内容”。模型设置里只需要填写你自己的模型和 API Key。
+5. 右侧“AI 写作”中输入写作任务，点击“生成内容”。模型设置里需要设置本机解锁口令、选择模型并填入你自己的 API Key。
 6. 点击“写作风格与去 AI 味”“写作 Skill”或“封面生成”使用对应功能。设置窗口可以拖动标题栏，右下角可以调整大小。
 7. 封面工作区支持比例、风格、参考素材和负面提示词；点击“回到写作”返回 AI 写作区。
 

@@ -86,6 +86,14 @@ describe('encrypted AI configuration', () => {
     expect(result.error).toMatch(/URL|invalid/i)
   })
 
+  it('rejects credential-bearing model endpoints when saving and importing', async () => {
+    await expect(addModelProfile(createDefaultAiConfig(), { ...openAiInput, baseUrl: 'https://user:pass@api.example.test/v1' }, 'passphrase')).rejects.toThrow(/HTTP|URL/i)
+    const current = createDefaultAiConfig()
+    const result = importAiConfig(JSON.stringify({ schemaVersion: 1, models: [{ id: 'm', name: 'Unsafe', provider: 'openai-compatible', baseUrl: 'https://user:pass@api.example.test/v1', model: 'x', streaming: false, imageGeneration: false, enabled: true }], styles: [], humanization: current.humanization }), current)
+    expect(result.config).toEqual(current)
+    expect(result.error).toMatch(/URL|invalid/i)
+  })
+
   it('supports multiple model profiles and style presets with one default each', async () => {
     let config = await addModelProfile(createDefaultAiConfig(), openAiInput, 'passphrase')
     config = await addModelProfile(config, { ...openAiInput, name: 'Gemini', provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-2.5-flash', apiKey: 'AIza-test' }, 'passphrase')
@@ -117,6 +125,14 @@ describe('encrypted AI configuration', () => {
     const input = modelInputFromPreset(MODEL_PRESETS[0], 'sk-user-supplied')
     expect(input).toMatchObject({ name: 'DeepSeek V4 Flash（快速）', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash', temperature: 0.7, maxTokens: 8192, streaming: true })
     expect(input.apiKey).toBe('sk-user-supplied')
+  })
+
+  it('keeps the curated global model list on the current stable model identifiers', () => {
+    const presetModels = MODEL_PRESETS.map((preset) => preset.model)
+    expect(presetModels).toContain('gpt-5.2')
+    expect(presetModels).toContain('gemini-3.5-flash-lite')
+    expect(presetModels).not.toContain('gpt-5.1')
+    expect(presetModels).not.toContain('gemini-3.1-flash-lite')
   })
 
   it('repairs the legacy placeholder DeepSeek profile when loading saved config', () => {

@@ -2,6 +2,7 @@ import { exportConfig, isHttpUrl, loadConfig, type CreatorDockConfig, type IdFac
 
 const DESKTOP_CONFIG_FILE = 'creatordock.json'
 const WINDOW_STATE_KEY = 'windowState'
+const MAC_DESKTOP_ALIAS_ONBOARDING_KEY = 'macDesktopAliasOnboardingHandled'
 
 type TauriStore = {
   get<T>(key: string): Promise<T | null | undefined>
@@ -270,4 +271,27 @@ export async function removeDesktopAlias(name = 'CreatorDock'): Promise<DesktopA
   if (!isTauriRuntime()) throw new Error('Desktop aliases are available in the installed app.')
   const { invoke } = await import('@tauri-apps/api/core')
   return invoke<DesktopAliasStatus>('remove_desktop_alias', { name })
+}
+
+export function shouldOfferMacDesktopAlias(
+  platform: DesktopPlatform,
+  alias: DesktopAliasStatus | null,
+  onboardingHandled: boolean | null,
+): boolean {
+  return platform === 'macos' && alias?.exists === false && onboardingHandled === false
+}
+
+export async function getMacDesktopAliasOnboardingHandled(): Promise<boolean | null> {
+  if (!isTauriRuntime()) return null
+  const { load } = await import('@tauri-apps/plugin-store')
+  const store = await load(DESKTOP_CONFIG_FILE, { autoSave: false }) as unknown as TauriStore
+  return (await store.get<boolean>(MAC_DESKTOP_ALIAS_ONBOARDING_KEY)) === true
+}
+
+export async function markMacDesktopAliasOnboardingHandled(): Promise<void> {
+  if (!isTauriRuntime()) return
+  const { load } = await import('@tauri-apps/plugin-store')
+  const store = await load(DESKTOP_CONFIG_FILE, { autoSave: false }) as unknown as TauriStore
+  await store.set(MAC_DESKTOP_ALIAS_ONBOARDING_KEY, true)
+  await store.save()
 }

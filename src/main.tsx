@@ -34,15 +34,19 @@ import {
 import { platformLabel, translate } from './i18n'
 import './styles.css'
 import { AiWorkbench } from './aiWorkbench'
+import { browserWindowName, openBrowserEntryWindow, rememberBrowserWindow } from './browserWindows'
 import {
   createDesktopAlias,
   getDesktopAliasStatus,
   getDesktopPlatform,
+  getMacDesktopAliasOnboardingHandled,
   initializeDesktopWindow,
   isTauriRuntime,
+  markMacDesktopAliasOnboardingHandled,
   openDesktopConfigStore,
   openExternalUrl,
   removeDesktopAlias,
+  shouldOfferMacDesktopAlias,
   type DesktopAliasStatus,
   type DesktopConfigStore,
   type DesktopPlatform,
@@ -77,6 +81,7 @@ export function App() {
   const [desktopPlatform, setDesktopPlatform] = useState<DesktopPlatform>('other')
   const [desktopAliasBusy, setDesktopAliasBusy] = useState(false)
   const [desktopAliasFeedback, setDesktopAliasFeedback] = useState<string | null>(null)
+  const [macDesktopAliasOnboardingHandled, setMacDesktopAliasOnboardingHandled] = useState<boolean | null>(null)
   const [desktopWindow, setDesktopWindow] = useState<DesktopWindowController | null>(null)
   const [windowMode, setWindowMode] = useState<WindowMode>('normal')
   const [windowBusy, setWindowBusy] = useState(false)
@@ -143,6 +148,21 @@ export function App() {
       .catch(() => setDesktopAliasFeedback(t('desktopShortcutStatusUnavailable')))
   }, [desktopRuntime])
 
+  useEffect(() => {
+    if (!desktopRuntime || desktopPlatform !== 'macos' || desktopAlias === null) return
+    let cancelled = false
+    void getMacDesktopAliasOnboardingHandled()
+      .then((handled) => {
+        if (!cancelled) setMacDesktopAliasOnboardingHandled(handled)
+      })
+      .catch(() => {
+        if (!cancelled) setMacDesktopAliasOnboardingHandled(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [desktopAlias, desktopPlatform, desktopRuntime])
+
   const visibleEntries = useMemo(
     () => filterLaunchEntries(config.entries, query),
     [config.entries, query],
@@ -156,12 +176,31 @@ export function App() {
     })
   }
 
-  const handleDestinationOpen = (event: ReactMouseEvent<HTMLAnchorElement>, url: string) => {
-    if (!desktopRuntime) return
+  const handleDestinationOpen = (event: ReactMouseEvent<HTMLAnchorElement>, url: string, entryId: string, displayName: string) => {
+    if (desktopRuntime) {
+      event.preventDefault()
+      void openExternalUrl(url).catch(() => {
+        setFeedback({ kind: 'error', message: t('destinationOpenFailed') })
+      })
+      return
+    }
+    let opened = false
+    try {
+      opened = openBrowserEntryWindow(url, entryId)
+    } catch {
+      opened = false
+    }
+    if (!opened) {
+      setFeedback({ kind: 'status', message: `${displayName} · ${t('destinationOpenedInTab')}` })
+      return
+    }
     event.preventDefault()
-    void openExternalUrl(url).catch(() => {
-      setFeedback({ kind: 'error', message: t('destinationOpenFailed') })
-    })
+    try {
+      rememberBrowserWindow(localStorage, { entryId, windowName: browserWindowName(entryId), url, lastOpenedAt: new Date().toISOString() })
+    } catch {
+      // The window already opened, so preserve the success state even if metadata cannot be stored.
+    }
+    setFeedback({ kind: 'status', message: `${displayName} · ${t('destinationOpenedInWindow')}` })
   }
 
   const toggleDesktopAlias = async () => {
@@ -173,6 +212,33 @@ export function App() {
         : await createDesktopAlias()
       setDesktopAlias(next)
       setDesktopAliasFeedback(next.exists ? t('desktopAliasCreated') : t('desktopAliasRemoved'))
+    } catch {
+      setDesktopAliasFeedback(t('desktopAliasChangeFailed'))
+    } finally {
+      setDesktopAliasBusy(false)
+    }
+  }
+
+  const dismissMacDesktopAliasOnboarding = async () => {
+    try {
+      await markMacDesktopAliasOnboardingHandled()
+      setMacDesktopAliasOnboardingHandled(true)
+    } catch {
+      setDesktopAliasFeedback(t('desktopAliasChangeFailed'))
+    }
+  }
+
+  const createMacDesktopAliasFromOnboarding = async () => {
+    setDesktopAliasBusy(true)
+    setDesktopAliasFeedback(null)
+    try {
+      const next = await createDesktopAlias()
+      setDesktopAlias(next)
+      if (next.exists) {
+        await markMacDesktopAliasOnboardingHandled()
+        setMacDesktopAliasOnboardingHandled(true)
+        setDesktopAliasFeedback(t('desktopAliasCreated'))
+      }
     } catch {
       setDesktopAliasFeedback(t('desktopAliasChangeFailed'))
     } finally {
@@ -370,6 +436,16 @@ export function App() {
         </section>
       </main>
       <aside className="ai-column"><AiWorkbench language={config.language} /></aside>
+      {shouldOfferMacDesktopAlias(desktopPlatform, desktopAlias, macDesktopAliasOnboardingHandled) && (
+        <section className="mac-alias-onboarding" role="status" aria-label={t('macDesktopAliasTitle')}>
+          <strong>{t('macDesktopAliasTitle')}</strong>
+          <p>{t('macDesktopAliasDescription')}</p>
+          <div>
+            <button className="primary-action" type="button" disabled={desktopAliasBusy} onClick={() => void createMacDesktopAliasFromOnboarding()}>{desktopAliasBusy ? t('working') : t('createDesktopAlias')}</button>
+            <button type="button" disabled={desktopAliasBusy} onClick={() => void dismissMacDesktopAliasOnboarding()}>{t('macDesktopAliasSkip')}</button>
+          </div>
+        </section>
+      )}
       {editingEntry !== undefined && (
         <EntryDialog entry={editingEntry} onClose={closeEditor} onSave={saveEntry} language={config.language} />
       )}
@@ -441,7 +517,7 @@ function DestinationCard({
   onMove: (id: string, destinationIndex: number) => void
   onMoveEarlier: () => void
   onMoveLater: () => void
-  onOpen: (event: ReactMouseEvent<HTMLAnchorElement>, url: string) => void
+  onOpen: (event: ReactMouseEvent<HTMLAnchorElement>, url: string, entryId: string, displayName: string) => void
   language: LanguageSetting
 }) {
   const preset = entry.platformPresetId ? presetById.get(entry.platformPresetId) : undefined
@@ -465,7 +541,7 @@ function DestinationCard({
         href={entry.destinationUrl}
         target="_blank"
         rel="noopener noreferrer"
-        onClick={(event) => onOpen(event, entry.destinationUrl)}
+        onClick={(event) => onOpen(event, entry.destinationUrl, entry.id, entry.displayName)}
       >
         <span className="card-icon-wrap" style={{ '--card-accent': preset?.brandColor ?? '#e17045' } as CSSProperties}>
           <img className="card-icon" src={preset?.iconSrc ?? customIconSrc} alt="" aria-hidden="true" />
