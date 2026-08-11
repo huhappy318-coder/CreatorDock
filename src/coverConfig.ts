@@ -10,6 +10,7 @@ export interface CoverProviderOption {
   label: string
   endpoint: string
   hint: string
+  supportsOpenAiImagesRequest: boolean
 }
 
 export interface CoverProfile {
@@ -43,10 +44,10 @@ export interface CoverStorageAdapter {
 }
 
 export const COVER_PROVIDER_OPTIONS: readonly CoverProviderOption[] = [
-  { id: 'openai-images', label: 'OpenAI Images 兼容', endpoint: 'https://api.openai.com/v1/images/generations', hint: '需要支持 /images/generations 的接口' },
-  { id: 'dashscope-image', label: '通义万相 / DashScope', endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-to-image/image-synthesis', hint: '不同版本可能需要按厂商文档调整请求地址' },
-  { id: 'volcengine-seedream', label: '火山方舟 / Seedream', endpoint: 'https://ark.cn-beijing.volces.com/api/v3/images/generations', hint: '请以账号控制台的模型接口地址为准' },
-  { id: 'custom', label: '生图 / 自定义接口', endpoint: '', hint: '仅发送 OpenAI Images 兼容格式；请填入你自己的 HTTPS 地址' },
+  { id: 'openai-images', label: 'OpenAI Images 兼容', endpoint: 'https://api.openai.com/v1/images/generations', hint: '需要支持 /images/generations 的接口', supportsOpenAiImagesRequest: true },
+  { id: 'dashscope-image', label: '通义万相 / DashScope（需专用适配器）', endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-to-image/image-synthesis', hint: '当前版本未实现厂商专用请求格式，保留旧配置但不直接发送请求', supportsOpenAiImagesRequest: false },
+  { id: 'volcengine-seedream', label: '火山方舟 / Seedream（需专用适配器）', endpoint: 'https://ark.cn-beijing.volces.com/api/v3/images/generations', hint: '当前版本未实现厂商专用请求格式，保留旧配置但不直接发送请求', supportsOpenAiImagesRequest: false },
+  { id: 'custom', label: '生图 / 自定义接口', endpoint: '', hint: '仅发送 OpenAI Images 兼容格式；请填入你自己的 HTTPS 地址', supportsOpenAiImagesRequest: true },
 ]
 
 const PROVIDERS = new Set<CoverProviderKind>(COVER_PROVIDER_OPTIONS.map((option) => option.id))
@@ -89,6 +90,10 @@ export function loadCoverConfig(storage: CoverStorageAdapter): { config: CoverCo
 export async function unlockCoverApiKey(profile: CoverProfile, passphrase: string): Promise<string> {
   if (!profile.encryptedApiKey) throw new Error('This cover profile has no saved API key.')
   return decryptSecret(profile.encryptedApiKey, passphrase)
+}
+
+export function supportsOpenAiImagesRequest(profile: Pick<CoverProfile, 'provider'>): boolean {
+  return COVER_PROVIDER_OPTIONS.find((option) => option.id === profile.provider)?.supportsOpenAiImagesRequest === true
 }
 
 function normalizeInput(input: CoverProfileInput): Omit<CoverProfile, 'id' | 'encryptedApiKey'> {

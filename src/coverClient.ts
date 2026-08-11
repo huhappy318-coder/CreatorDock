@@ -1,4 +1,4 @@
-import type { CoverProfile } from './coverConfig'
+import { supportsOpenAiImagesRequest, type CoverProfile } from './coverConfig'
 
 export interface CoverRequest {
   prompt: string
@@ -13,7 +13,7 @@ export interface CoverResult {
 }
 
 export class CoverError extends Error {
-  kind: 'network' | 'http' | 'parse'
+  kind: 'network' | 'http' | 'parse' | 'unsupported'
   status?: number
   constructor(kind: CoverError['kind'], message: string, status?: number) { super(message); this.name = 'CoverError'; this.kind = kind; this.status = status }
 }
@@ -23,10 +23,15 @@ export function createCoverClient(profile: CoverProfile, apiKey: string, fetcher
   return {
     async generate(request: CoverRequest): Promise<CoverResult> {
       if (!request.prompt.trim()) throw new Error('A cover prompt is required.')
+      if (!supportsOpenAiImagesRequest(profile)) {
+        throw new CoverError('unsupported', 'This provider requires a dedicated request adapter before it can generate covers.')
+      }
       const negativePrompt = request.negativePrompt?.trim()
       const prompt = negativePrompt ? `${request.prompt.trim()}\n\n避免出现：${negativePrompt}` : request.prompt.trim()
       const payload: Record<string, unknown> = { model: profile.model, prompt, size: request.size, n: 1, response_format: 'b64_json' }
-      if (request.referenceImages?.length) payload.reference_images = request.referenceImages
+      if (request.referenceImages?.length) {
+        throw new CoverError('unsupported', 'Reference images require a dedicated image-edit adapter before they can be sent to any provider.')
+      }
       let response: Response
       try {
         response = await fetcher(profile.endpoint, { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(payload) })

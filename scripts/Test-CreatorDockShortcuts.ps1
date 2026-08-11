@@ -158,7 +158,7 @@ try {
 
     $chromeLink = $shell.CreateShortcut((Join-Path $outputDirectory 'Chrome destination.lnk'))
     Assert-Equal $chromeLink.TargetPath $browserExecutable 'Chrome shortcut should use the selected executable.'
-    Assert-Equal $chromeLink.Arguments '--profile-directory="Profile 2" "https://example.com/chrome"' 'Browser shortcut should bind the profile and URL.'
+    Assert-Equal $chromeLink.Arguments '--new-window --profile-directory="Profile 2" "https://example.com/chrome"' 'Browser shortcut should bind the profile, URL, and separate-window flag.'
 
     $collision = New-CreatorDockShortcuts `
         -InputPath $validPath `

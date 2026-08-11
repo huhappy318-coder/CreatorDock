@@ -19,7 +19,7 @@ hold the accounts themselves.
 
 ### 产品定位与预览
 
-CreatorDock 是一个静态、可安装的创作者工作台：把多个平台、多个账号的入口集中在同一处，同时让同平台账号保持独立。普通卡片始终以隔离的外部链接打开；选择 Chrome、Edge 或 profile directory 只影响导出的 Windows 快捷方式。
+CreatorDock 是一个静态、可安装的创作者工作台：把多个平台、多个账号的入口集中在同一处，同时让同平台账号保持独立。浏览器/PWA 卡片始终以隔离的外部链接打开；Windows 桌面版会对已保存 Chrome、Edge 与 Profile 的入口请求独立浏览器窗口，系统浏览器和 macOS 仍交由系统外开。
 
 本地预览：
 
@@ -88,7 +88,11 @@ GitHub Releases 会按操作系统提供安装包：
 ```powershell
 npm run tauri:info
 npm run tauri:dev
-npm run tauri:build
+# Windows：仅构建 NSIS 安装包
+npm run tauri:build -- --bundles nsis --no-sign --ci
+
+# macOS：仅在 macOS 上执行，构建 Universal DMG
+npm run tauri:build -- --target universal-apple-darwin --bundles dmg --no-sign --ci
 ```
 
 浏览器版和桌面版使用同一份版本化 JSON。桌面应用不会自动读取浏览器 `localStorage`，请在浏览器导出并在桌面版导入；导出文件不包含登录凭据、Cookie、Token 或 API Key。
@@ -116,7 +120,7 @@ npm run test:icons
 
 ### 多模型写作与个人风格
 
-首页右侧的“AI 写作”只保留写作任务框和三个独立入口：“写作风格与去 AI 味”“写作 Skill”“封面生成”。顶部“模型设置”弹窗只管理模型、Base URL、模型 ID、API Key、连接测试和配置导入导出，不再混入风格与 Skill。首次添加模型时，按“选择模型 → 填写 API Key → 测试并保存”完成即可；已预填的接口参数收在“高级参数”中。你可以添加多个 OpenAI 兼容、DeepSeek、通义千问、智谱 GLM、Kimi、MiniMax、豆包/火山方舟、百川、腾讯混元、硅基流动、Gemini 或 Anthropic 模型；模型元数据保存在本机，API Key 使用你设置的本机解锁口令通过 PBKDF2 + AES-GCM 加密。口令只存在当前页面内存中，不会保存、上传或写入导出文件。
+首页右侧的“AI 写作”只保留写作任务框和三个独立入口：“写作风格与去 AI 味”“写作 Skill”“封面生成”。顶部“模型设置”弹窗只管理模型、Base URL、模型 ID、API Key、连接测试和配置导入导出，不再混入风格与 Skill。首次添加模型时，按“选择模型 → 填写 API Key → 保存并返回”完成即可；保存不会等待远程接口，之后可单独点击“测试当前连接”。已预填的接口参数收在“高级参数”中。你可以添加多个 OpenAI 兼容、DeepSeek、通义千问、智谱 GLM、Kimi、MiniMax、豆包/火山方舟、百川、腾讯混元、硅基流动、Gemini 或 Anthropic 模型；模型元数据保存在本机，API Key 使用你设置的本机解锁口令通过 PBKDF2 + AES-GCM 加密。口令只存在当前页面内存中，不会保存、上传或写入导出文件。
 
 每次生成会按固定顺序组合任务、当前风格描述、`.txt/.md` 样本、可编辑的去 AI 味规则和任务要求。样本仅作风格参考，不会被当作指令。可以创建多个风格、随时切换或临时关闭风格规则，并维护禁用词与必须习惯。写作草稿和历史记录保存在本机；“新对话”只开启新的草稿，不会清除已有记录。
 
@@ -130,7 +134,7 @@ npm run test:icons
 
 在独立的“写作 Skill”入口里可以从公开 GitHub 的 `SKILL.md` 导入 Skill，也可以上传本地 Markdown 文件。Skill 会保存在本机，可启用、停用和删除；它只会作为结构、标题、平台适配或封面方向的建议参考，不会被执行、代替用户发文，也不会自动发布内容。导入只允许 HTTPS 的 `github.com` / `raw.githubusercontent.com`，单个 Skill 限制为 120,000 字符。
 
-“封面生成”会打开独立的视觉工作区。用户可以选择 1:1、4:5、3:4、16:9、9:16、2:3 比例、预设风格、负面提示词和最多 3 张参考图，并在“封面设置”中填写自己的图片 API、模型 ID 和 API Key。负面提示词会作为明确规避要求合并进标准 prompt，不擅自发送未标准化字段；“生图 / 自定义接口”只提供兼容入口，不猜测未提供文档的私有协议。图片 Key 同样使用本机口令加密，不上传到 CreatorDock，也不会自动发布。
+“封面生成”会打开独立的视觉工作区。用户可以选择 1:1、4:5、3:4、16:9、9:16、2:3 比例、预设风格、负面提示词，并选择最多 3 张参考图进行本地预览；当前兼容接口不会发送参考图，只有接入明确支持图片编辑的适配器后才会使用。用户可在“封面设置”中填写自己的图片 API、模型 ID 和 API Key。负面提示词会作为明确规避要求合并进标准 prompt，不擅自发送未标准化字段；“生图 / 自定义接口”只提供兼容入口，不猜测未提供文档的私有协议。图片 Key 同样使用本机口令加密，不上传到 CreatorDock，也不会自动发布。
 
 ### Windows 本地 launcher 与快捷方式 helper
 
@@ -192,8 +196,9 @@ CreatorDock v1 不提供登录或凭据管理、自动发布、平台 analytics�
 
 CreatorDock is a static, installable creator workbench for keeping multiple
 platform and account destinations distinct. Web cards remain isolated external
-links. Chrome, Edge, and profile-directory choices apply only to exported
-Windows shortcuts.
+links. In the Windows desktop app, saved Chrome, Edge, and profile-directory
+choices also open the matching browser profile in a new window. A browser/PWA
+installation cannot force a specific browser profile.
 
 For a local development preview:
 
@@ -265,7 +270,11 @@ Command Line Tools:
 ```powershell
 npm run tauri:info
 npm run tauri:dev
-npm run tauri:build
+# Windows: build only the NSIS installer
+npm run tauri:build -- --bundles nsis --no-sign --ci
+
+# macOS: run on macOS to build the Universal DMG
+npm run tauri:build -- --target universal-apple-darwin --bundles dmg --no-sign --ci
 ```
 
 The browser PWA and desktop app share the same versioned JSON configuration

@@ -6,6 +6,8 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }))
 
+type DesktopEntry = { destinationUrl: string, browserTarget: 'default' | 'chrome' | 'edge', profileDirectoryName?: string }
+
 afterEach(() => {
   Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
 })
@@ -53,8 +55,40 @@ describe('desktop bridge', () => {
     expect(invoke).toHaveBeenCalledWith('open_external', { url: 'https://example.com/creator' })
   })
 
+  it('routes a profiled Chrome entry through the restricted separate-window command', async () => {
+    Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} })
+    const bridge = await import('./desktop') as typeof import('./desktop') & {
+      openDesktopEntry?: (entry: DesktopEntry) => Promise<boolean>
+    }
+
+    expect(bridge.openDesktopEntry).toBeTypeOf('function')
+    await expect(bridge.openDesktopEntry!({
+      destinationUrl: 'https://example.com/creator',
+      browserTarget: 'chrome',
+      profileDirectoryName: 'Profile 2',
+    })).resolves.toBe(true)
+    expect(invoke).toHaveBeenLastCalledWith('open_browser_entry', {
+      url: 'https://example.com/creator',
+      browserTarget: 'chrome',
+      profileDirectoryName: 'Profile 2',
+    })
+  })
+
+  it('rejects an unsafe legacy browser profile before calling the desktop command', async () => {
+    Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} })
+    const bridge = await import('./desktop') as typeof import('./desktop') & {
+      openDesktopEntry?: (entry: DesktopEntry) => Promise<boolean>
+    }
+
+    expect(bridge.openDesktopEntry).toBeTypeOf('function')
+    vi.mocked(invoke).mockClear()
+    await expect(bridge.openDesktopEntry!({ destinationUrl: 'https://example.com/creator', browserTarget: 'edge', profileDirectoryName: 'Profile 2 --incognito' })).rejects.toThrow('Profile directory')
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
   it('offers the macOS desktop alias only once its status and onboarding flag are known', () => {
     expect(shouldOfferMacDesktopAlias('macos', { exists: false }, false)).toBe(true)
+    expect(shouldOfferMacDesktopAlias('macos', { exists: false, requiresInstall: true }, false)).toBe(false)
     expect(shouldOfferMacDesktopAlias('macos', { exists: true }, false)).toBe(false)
     expect(shouldOfferMacDesktopAlias('windows', { exists: false }, false)).toBe(false)
     expect(shouldOfferMacDesktopAlias('macos', { exists: false }, null)).toBe(false)

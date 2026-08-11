@@ -29,6 +29,7 @@ export default defineConfig({
       manifest: {
         name: 'CreatorDock',
         short_name: 'CreatorDock',
+        lang: 'zh-CN',
         description: 'A private creator launchpad for your publishing workbench.',
         theme_color: '#f7f3ec',
         background_color: '#f7f3ec',

@@ -127,12 +127,55 @@ describe('encrypted AI configuration', () => {
     expect(input.apiKey).toBe('sk-user-supplied')
   })
 
-  it('keeps the curated global model list on the current stable model identifiers', () => {
+  it('keeps the curated global model list on current model identifiers', () => {
     const presetModels = MODEL_PRESETS.map((preset) => preset.model)
-    expect(presetModels).toContain('gpt-5.2')
+    expect(presetModels).toContain('gpt-5.6-sol')
+    expect(presetModels).toContain('gpt-5.6-terra')
+    expect(presetModels).toContain('gpt-5.6-luna')
+    expect(presetModels).toContain('kimi-k2.6')
+    expect(presetModels).toContain('claude-sonnet-5')
+    expect(presetModels).toContain('claude-haiku-4-5-20251001')
     expect(presetModels).toContain('gemini-3.5-flash-lite')
-    expect(presetModels).not.toContain('gpt-5.1')
-    expect(presetModels).not.toContain('gemini-3.1-flash-lite')
+    expect(presetModels).not.toContain('gpt-5.2')
+    expect(presetModels).not.toContain('kimi-k2.5')
+    expect(presetModels).not.toContain('claude-sonnet-4-0')
+  })
+
+  it('leaves provider-managed sampling unset for models that reject arbitrary temperature values', () => {
+    const temperatureManagedByProvider = MODEL_PRESETS.filter((preset) => ['gemini', 'moonshot', 'anthropic'].includes(preset.provider))
+    expect(temperatureManagedByProvider).not.toHaveLength(0)
+    expect(temperatureManagedByProvider.every((preset) => preset.temperature === undefined)).toBe(true)
+    expect(modelInputFromPreset(temperatureManagedByProvider[0], 'key')).not.toHaveProperty('temperature')
+  })
+
+  it('removes legacy temperature values for providers that manage sampling themselves', async () => {
+    const gemini = MODEL_PRESETS.find((preset) => preset.provider === 'gemini')!
+    const added = await addModelProfile(
+      createDefaultAiConfig(),
+      { ...modelInputFromPreset(gemini, 'AIza-test'), temperature: 0.7 },
+      'passphrase',
+    )
+    expect(added.models[0]).not.toHaveProperty('temperature')
+
+    const current = createDefaultAiConfig()
+    currentStorage.setItem(AI_CONFIG_STORAGE_KEY, JSON.stringify({
+      schemaVersion: 1,
+      models: [{
+        id: 'legacy-kimi',
+        name: 'Kimi legacy',
+        provider: 'moonshot',
+        baseUrl: 'https://api.moonshot.cn/v1',
+        model: 'kimi-k2.6',
+        temperature: 0.7,
+        maxTokens: 8192,
+        streaming: true,
+        imageGeneration: false,
+        enabled: true,
+      }],
+      styles: [],
+      humanization: current.humanization,
+    }))
+    expect(loadAiConfig(currentStorage).config.models[0]).not.toHaveProperty('temperature')
   })
 
   it('repairs the legacy placeholder DeepSeek profile when loading saved config', () => {

@@ -1,5 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "windows")]
+use std::process::Command;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
@@ -9,6 +11,8 @@ use tauri_plugin_shell::ShellExt;
 pub struct DesktopAliasStatus {
     pub exists: bool,
     pub path: Option<String>,
+    #[serde(rename = "requiresInstall")]
+    pub requires_install: bool,
 }
 
 fn validate_alias_name(name: &str) -> Result<(), String> {
@@ -30,6 +34,62 @@ fn validate_http_url(value: &str) -> Result<(), String> {
         return Err("URLs with embedded credentials are not allowed.".to_string());
     }
     Ok(())
+}
+
+fn validate_browser_target(value: &str) -> Result<(), String> {
+    if matches!(value, "default" | "chrome" | "edge") {
+        Ok(())
+    } else {
+        Err("Browser target must be default, chrome, or edge.".to_string())
+    }
+}
+
+fn validate_profile_directory_name(value: Option<&str>, browser_target: &str) -> Result<(), String> {
+    let Some(profile_directory_name) = value else {
+        return Ok(());
+    };
+    let valid_profile = profile_directory_name == "Default"
+        || profile_directory_name
+            .strip_prefix("Profile ")
+            .is_some_and(|number| !number.is_empty() && number.chars().all(|character| character.is_ascii_digit()));
+    if !valid_profile {
+        return Err("Profile directory must be Default or Profile N.".to_string());
+    }
+    if browser_target == "default" {
+        return Err("Profile directory requires a Chrome or Edge browser target.".to_string());
+    }
+    Ok(())
+}
+
+fn browser_launch_arguments(url: &str, browser_target: &str, profile_directory_name: Option<&str>) -> Result<Vec<String>, String> {
+    validate_http_url(url)?;
+    validate_browser_target(browser_target)?;
+    validate_profile_directory_name(profile_directory_name, browser_target)?;
+    let mut arguments = vec!["--new-window".to_string()];
+    if let Some(profile_directory_name) = profile_directory_name {
+        arguments.push(format!("--profile-directory={profile_directory_name}"));
+    }
+    arguments.push(url.to_string());
+    Ok(arguments)
+}
+
+#[cfg(target_os = "windows")]
+fn browser_executable(browser_target: &str) -> Result<PathBuf, String> {
+    let relative_path = match browser_target {
+        "chrome" => r"Google\Chrome\Application\chrome.exe",
+        "edge" => r"Microsoft\Edge\Application\msedge.exe",
+        _ => return Err("A Chrome or Edge browser target is required.".to_string()),
+    };
+    let mut candidates = Vec::new();
+    for variable in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"] {
+        if let Some(root) = std::env::var_os(variable) {
+            candidates.push(PathBuf::from(root).join(relative_path));
+        }
+    }
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+        .ok_or_else(|| format!("Could not find the configured {browser_target} browser executable."))
 }
 
 #[cfg(target_os = "macos")]
@@ -94,10 +154,23 @@ fn find_available_alias(app: &AppHandle, name: &str) -> Result<PathBuf, String> 
     Err("Could not find an unused Desktop alias name.".to_string())
 }
 
-fn status_for(_app: &AppHandle, path: Option<PathBuf>) -> DesktopAliasStatus {
+#[cfg(target_os = "macos")]
+fn requires_application_install(app: &AppHandle) -> bool {
+    alias_target(app)
+        .map(|target| target.starts_with(Path::new("/Volumes")))
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn requires_application_install(_app: &AppHandle) -> bool {
+    false
+}
+
+fn status_for(app: &AppHandle, path: Option<PathBuf>) -> DesktopAliasStatus {
     DesktopAliasStatus {
         exists: path.is_some(),
         path: path.map(|value| value.to_string_lossy().into_owned()),
+        requires_install: requires_application_install(app),
     }
 }
 
@@ -122,6 +195,44 @@ fn open_external(app: AppHandle, url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+#[allow(deprecated)]
+fn open_browser_entry(
+    app: AppHandle,
+    url: String,
+    browser_target: String,
+    profile_directory_name: Option<String>,
+) -> Result<(), String> {
+    validate_http_url(&url)?;
+    validate_browser_target(&browser_target)?;
+    validate_profile_directory_name(profile_directory_name.as_deref(), &browser_target)?;
+
+    if browser_target == "default" {
+        return app
+            .shell()
+            .open(url, None)
+            .map_err(|error| format!("Could not open the destination in the system browser: {error}"));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let executable = browser_executable(&browser_target)?;
+        let arguments = browser_launch_arguments(&url, &browser_target, profile_directory_name.as_deref())?;
+        Command::new(executable)
+            .args(arguments)
+            .spawn()
+            .map_err(|error| format!("Could not open the destination in a separate browser window: {error}"))?;
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        app.shell()
+            .open(url, None)
+            .map_err(|error| format!("Could not open the destination in the system browser: {error}"))
+    }
+}
+
+#[tauri::command]
 fn desktop_alias_status(app: AppHandle) -> Result<DesktopAliasStatus, String> {
     if !cfg!(target_os = "macos") {
         return Ok(status_for(&app, None));
@@ -136,6 +247,9 @@ fn create_desktop_alias(app: AppHandle, name: String) -> Result<DesktopAliasStat
         let target = alias_target(&app)?;
         if let Some(existing) = find_existing_alias(&app, &name)? {
             return Ok(status_for(&app, Some(existing)));
+        }
+        if target.starts_with(Path::new("/Volumes")) {
+            return Err("Install CreatorDock to Applications before creating a Desktop alias.".to_string());
         }
         let path = find_available_alias(&app, &name)?;
         std::os::unix::fs::symlink(&target, &path)
@@ -167,6 +281,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             open_external,
+            open_browser_entry,
             desktop_platform,
             desktop_alias_status,
             create_desktop_alias,
@@ -174,4 +289,29 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running CreatorDock");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builds_a_new_window_command_for_a_profiled_browser_entry() {
+        assert_eq!(
+            browser_launch_arguments("https://example.com/creator", "chrome", Some("Profile 2")).unwrap(),
+            vec![
+                "--new-window".to_string(),
+                "--profile-directory=Profile 2".to_string(),
+                "https://example.com/creator".to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn rejects_unsafe_browser_targets_profiles_and_urls() {
+        assert!(browser_launch_arguments("https://example.com/creator", "firefox", None).is_err());
+        assert!(browser_launch_arguments("https://example.com/creator", "edge", Some("Profile 2 --incognito")).is_err());
+        assert!(browser_launch_arguments("https://example.com/creator", "default", Some("Default")).is_err());
+        assert!(browser_launch_arguments("file:///unsafe", "chrome", None).is_err());
+    }
 }

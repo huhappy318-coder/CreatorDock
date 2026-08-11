@@ -16,7 +16,7 @@ if (duplicates.length > 0) {
   throw new Error(`Duplicate Workbox precache URLs: ${duplicates.join(', ')}`)
 }
 
-if (manifest.name !== 'CreatorDock' || manifest.start_url !== './' || manifest.scope !== './') {
+if (manifest.name !== 'CreatorDock' || manifest.lang !== 'zh-CN' || manifest.start_url !== './' || manifest.scope !== './') {
   throw new Error('The generated manifest does not retain CreatorDock relative start_url and scope.')
 }
 if (!Array.isArray(manifest.icons) || manifest.icons.length === 0 || manifest.icons.some((icon) => /^[a-z][a-z\d+.-]*:/i.test(icon.src) || icon.src.startsWith('//'))) {

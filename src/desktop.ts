@@ -1,4 +1,4 @@
-import { exportConfig, isHttpUrl, loadConfig, type CreatorDockConfig, type IdFactory, type StorageAdapter } from './config'
+import { exportConfig, isHttpUrl, loadConfig, type CreatorDockConfig, type IdFactory, type LaunchEntry, type StorageAdapter } from './config'
 
 const DESKTOP_CONFIG_FILE = 'creatordock.json'
 const WINDOW_STATE_KEY = 'windowState'
@@ -18,6 +18,7 @@ export interface DesktopConfigStore {
 export interface DesktopAliasStatus {
   exists: boolean
   path?: string
+  requiresInstall?: boolean
 }
 
 export type DesktopPlatform = 'macos' | 'windows' | 'other'
@@ -240,6 +241,22 @@ export async function openDesktopConfigStore(): Promise<DesktopConfigStore | nul
   }
 }
 
+export async function openDesktopEntry(entry: Pick<LaunchEntry, 'destinationUrl' | 'browserTarget' | 'profileDirectoryName'>): Promise<boolean> {
+  if (!isHttpUrl(entry.destinationUrl)) throw new Error('Only HTTP(S) URLs can be opened.')
+  if (entry.browserTarget !== 'default' && entry.browserTarget !== 'chrome' && entry.browserTarget !== 'edge') throw new Error('Browser target must be default, chrome, or edge.')
+  if (entry.profileDirectoryName !== undefined && !/^(Default|Profile \d+)$/.test(entry.profileDirectoryName)) throw new Error('Profile directory must be Default or Profile N.')
+  if (entry.browserTarget === 'default' && entry.profileDirectoryName !== undefined) throw new Error('Profile directory requires a Chrome or Edge browser target.')
+  if (!isTauriRuntime()) return false
+
+  const { invoke } = await import('@tauri-apps/api/core')
+  await invoke('open_browser_entry', {
+    url: entry.destinationUrl,
+    browserTarget: entry.browserTarget,
+    ...(entry.profileDirectoryName === undefined ? {} : { profileDirectoryName: entry.profileDirectoryName }),
+  })
+  return true
+}
+
 export async function openExternalUrl(url: string): Promise<boolean> {
   if (!isHttpUrl(url)) throw new Error('Only HTTP(S) URLs can be opened.')
   if (!isTauriRuntime()) return false
@@ -278,7 +295,7 @@ export function shouldOfferMacDesktopAlias(
   alias: DesktopAliasStatus | null,
   onboardingHandled: boolean | null,
 ): boolean {
-  return platform === 'macos' && alias?.exists === false && onboardingHandled === false
+  return platform === 'macos' && alias?.exists === false && alias.requiresInstall !== true && onboardingHandled === false
 }
 
 export async function getMacDesktopAliasOnboardingHandled(): Promise<boolean | null> {

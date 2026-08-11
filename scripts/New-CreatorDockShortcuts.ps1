@@ -286,10 +286,10 @@ function New-CreatorDockShortcuts {
                 throw "Configured $($entry.BrowserTarget) executable was not found: $targetPath"
             }
             $arguments = if ($entry.ProfileDirectoryName) {
-                '--profile-directory="{0}" "{1}"' -f $entry.ProfileDirectoryName, $entry.DestinationUrl
+                '--new-window --profile-directory="{0}" "{1}"' -f $entry.ProfileDirectoryName, $entry.DestinationUrl
             }
             else {
-                '"{0}"' -f $entry.DestinationUrl
+                '--new-window "{0}"' -f $entry.DestinationUrl
             }
         }
 

@@ -6,7 +6,7 @@
 
 1. 打开 [GitHub Releases](https://github.com/huhappy318-coder/CreatorDock/releases)，确认页面已有适合你系统的安装附件。
 2. Windows 下载 `CreatorDock_*_x64-setup.exe` 并双击安装；macOS 下载 `.dmg`，将应用拖入“应用程序”。
-3. 从桌面或“应用程序”启动 CreatorDock。首次使用请在“模型设置”中设置本机解锁口令、选择模型并填入自己的 API Key，然后点击“测试并保存”。
+3. 从桌面或“应用程序”启动 CreatorDock。首次使用请在“模型设置”中设置本机解锁口令、选择模型并填入自己的 API Key，然后点击“保存并返回”；保存后可单独测试连接。
 
 > Releases 页面尚无附件时，说明公开安装包还未发布；请不要下载来源不明的同名文件，可先按本文末尾的源码方式运行。
 
@@ -44,12 +44,12 @@ CreatorDock is a local-first, installable launchpad for creators who manage mult
 ## 基本使用
 
 1. 打开 CreatorDock，首页会显示 7 个常用入口，包括两个公众号账号入口。
-2. 点击任意卡片即可在系统浏览器打开对应的官方创作页或平台入口。
+2. 点击任意卡片即可打开对应的官方创作页或平台入口；Windows 桌面版中，已保存 Chrome/Edge 与 Profile 的入口会请求独立浏览器窗口。
 3. 使用顶部搜索框查找入口；点击“添加入口”可以增加平台或自定义网址。
 4. 卡片底部可以上移、下移、编辑或删除入口；点击“更多操作”可复制入口，浏览器版还可用新窗口打开。
-5. 右侧“AI 写作”中输入写作任务，点击“生成内容”。首次需要在模型设置里设置本机解锁口令、选择模型并填入你自己的 API Key，再点击“测试并保存”。草稿和写作记录会保存在本机；“新对话”只清空当前草稿，不会删除历史记录。
+5. 右侧“AI 写作”中输入写作任务，点击“生成内容”。首次需要在模型设置里设置本机解锁口令、选择模型并填入你自己的 API Key，再点击“保存并返回”；草稿和写作记录会保存在本机，“新对话”只清空当前草稿，不会删除历史记录。
 6. 点击“写作风格与去 AI 味”“写作 Skill”或“封面生成”使用对应功能。设置窗口可以拖动标题栏，右下角可以调整大小。
-7. 封面工作区支持比例、风格、参考素材和负面提示词；点击“回到写作”返回 AI 写作区。
+7. 封面工作区支持比例、风格、负面提示词和参考素材预览；当前兼容接口不会发送参考图，只有接入明确支持图片编辑的适配器后才会使用。点击“回到写作”返回 AI 写作区。
 
 ## 注意事项
 
@@ -68,7 +68,11 @@ npm run dev
 桌面安装包构建：
 
 ```powershell
-npm run tauri:build
+# Windows
+npm run tauri:build -- --bundles nsis --no-sign --ci
+
+# macOS（仅在 macOS 上运行）
+npm run tauri:build -- --target universal-apple-darwin --bundles dmg --no-sign --ci
 ```
 
 当前项目地址：[huhappy318-coder/CreatorDock](https://github.com/huhappy318-coder/CreatorDock)

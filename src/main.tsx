@@ -46,7 +46,7 @@ import {
   isTauriRuntime,
   markMacDesktopAliasOnboardingHandled,
   openDesktopConfigStore,
-  openExternalUrl,
+  openDesktopEntry,
   removeDesktopAlias,
   shouldOfferMacDesktopAlias,
   type DesktopAliasStatus,
@@ -182,14 +182,13 @@ export function App() {
 
   const handleDestinationOpen = (
     event: ReactMouseEvent<HTMLAnchorElement>,
-    url: string,
-    entryId: string,
-    displayName: string,
+    entry: LaunchEntry,
     mode: 'account' | 'new' = 'account',
   ) => {
+    const { destinationUrl: url, id: entryId, displayName } = entry
     if (desktopRuntime) {
       event.preventDefault()
-      void openExternalUrl(url).catch(() => {
+      void openDesktopEntry(entry).catch(() => {
         setFeedback({ kind: 'error', message: t('destinationOpenFailed') })
       })
       return
@@ -404,8 +403,8 @@ export function App() {
           {desktopRuntime && desktopPlatform === 'macos' && (
             <section className="desktop-panel" aria-labelledby="desktop-heading">
               <h2 id="desktop-heading">{t('desktopEntry')}</h2>
-              <p>{desktopAlias?.exists ? t('desktopAvailable') : t('createOptionalAlias')}</p>
-              <button type="button" disabled={desktopAliasBusy} onClick={() => void toggleDesktopAlias()}>{desktopAliasBusy ? t('working') : desktopAlias?.exists ? t('removeDesktopAlias') : t('createDesktopAlias')}</button>
+              <p>{desktopAlias?.exists ? t('desktopAvailable') : desktopAlias?.requiresInstall ? t('macInstallBeforeAliasDescription') : t('createOptionalAlias')}</p>
+              <button type="button" disabled={desktopAliasBusy || (!desktopAlias?.exists && desktopAlias?.requiresInstall === true)} onClick={() => void toggleDesktopAlias()}>{desktopAliasBusy ? t('working') : desktopAlias?.exists ? t('removeDesktopAlias') : t('createDesktopAlias')}</button>
               {desktopAliasFeedback && <p className="desktop-feedback" role="status">{desktopAliasFeedback}</p>}
             </section>
           )}
@@ -463,7 +462,7 @@ export function App() {
                   onOpen={handleDestinationOpen}
                   onOpenNew={(event) => {
                     setEntryMenuId(null)
-                    handleDestinationOpen(event, item.destinationUrl, item.id, item.displayName, 'new')
+                    handleDestinationOpen(event, item, 'new')
                   }}
                   allowNewWindow={!desktopRuntime}
                   language={config.language}
@@ -482,6 +481,12 @@ export function App() {
             <button className="primary-action" type="button" disabled={desktopAliasBusy} onClick={() => void createMacDesktopAliasFromOnboarding()}>{desktopAliasBusy ? t('working') : t('createDesktopAlias')}</button>
             <button type="button" disabled={desktopAliasBusy} onClick={() => void dismissMacDesktopAliasOnboarding()}>{t('macDesktopAliasSkip')}</button>
           </div>
+        </section>
+      )}
+      {desktopRuntime && desktopPlatform === 'macos' && desktopAlias?.requiresInstall === true && !desktopAlias.exists && (
+        <section className="mac-alias-onboarding" role="status" aria-label={t('macInstallBeforeAliasTitle')}>
+          <strong>{t('macInstallBeforeAliasTitle')}</strong>
+          <p>{t('macInstallBeforeAliasDescription')}</p>
         </section>
       )}
       {editingEntry !== undefined && (
@@ -561,7 +566,7 @@ function DestinationCard({
   onMove: (id: string, destinationIndex: number) => void
   onMoveEarlier: () => void
   onMoveLater: () => void
-  onOpen: (event: ReactMouseEvent<HTMLAnchorElement>, url: string, entryId: string, displayName: string) => void
+  onOpen: (event: ReactMouseEvent<HTMLAnchorElement>, entry: LaunchEntry) => void
   onOpenNew: (event: ReactMouseEvent<HTMLAnchorElement>) => void
   onCopy: (button: HTMLButtonElement) => void
   onMenuClose: () => void
@@ -591,7 +596,7 @@ function DestinationCard({
         href={entry.destinationUrl}
         target="_blank"
         rel="noopener noreferrer"
-        onClick={(event) => onOpen(event, entry.destinationUrl, entry.id, entry.displayName)}
+        onClick={(event) => onOpen(event, entry)}
       >
         <span className="card-icon-wrap" style={{ '--card-accent': preset?.brandColor ?? '#e17045' } as CSSProperties}>
           <img className="card-icon" src={preset?.iconSrc ?? customIconSrc} alt="" aria-hidden="true" />

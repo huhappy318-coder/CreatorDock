@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 
 interface PanelFrame {
   x: number
@@ -183,16 +183,43 @@ interface FloatingPanelProps extends PanelOptions {
 
 export function FloatingPanel({ eyebrow, title, closeLabel, onClose, className = '', children, width, height, minWidth, minHeight }: FloatingPanelProps) {
   const panel = useFloatingPanel({ width, height, minWidth, minHeight })
+  const closeButton = useRef<HTMLButtonElement>(null)
   const titleId = `floating-panel-title-${title.replace(/[^a-z0-9\u4e00-\u9fff]+/gi, '-').toLowerCase()}`
-  return <section className={`floating-panel ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={titleId} style={panel.panelStyle}>
+  useEffect(() => {
+    closeButton.current?.focus()
+  }, [])
+
+  return <section className={`floating-panel ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={titleId} style={panel.panelStyle} onKeyDown={(event) => containPanelFocus(event, onClose)}>
     <div className="floating-panel-heading" onPointerDown={panel.handleDragStart} onPointerMove={panel.handleDragMove} onPointerUp={panel.handleDragEnd} onPointerCancel={panel.handleDragEnd} onMouseDown={panel.handleMouseDragStart} onMouseMove={panel.handleMouseDragMove} onMouseUp={panel.handleMouseDragEnd}>
       <div>
         <p className="eyebrow">{eyebrow}</p>
         <h3 id={titleId}>{title}</h3>
       </div>
-      <button type="button" aria-label={closeLabel} onClick={onClose}>×</button>
+      <button ref={closeButton} type="button" aria-label={closeLabel} onClick={onClose}>×</button>
     </div>
     <div className="floating-panel-content">{children}</div>
     <button className="floating-panel-resize" type="button" aria-label="调整面板大小" onPointerDown={panel.handleResizeStart} onPointerMove={panel.handleResizeMove} onPointerUp={panel.handleResizeEnd} onPointerCancel={panel.handleResizeEnd} onMouseDown={panel.handleMouseResizeStart} onMouseMove={panel.handleMouseResizeMove} onMouseUp={panel.handleMouseResizeEnd} />
   </section>
+}
+
+function containPanelFocus(event: ReactKeyboardEvent<HTMLElement>, onEscape: () => void): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    onEscape()
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const controls = [...event.currentTarget.querySelectorAll<HTMLElement>(
+    'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)',
+  )]
+  const first = controls[0]
+  const last = controls.at(-1)
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
 }

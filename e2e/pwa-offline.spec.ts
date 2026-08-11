@@ -7,8 +7,8 @@ test('loads the CreatorDock app shell from its service worker while offline', as
 
   await page.goto('')
   await page.waitForFunction(async () => {
-    await navigator.serviceWorker.ready
-    return true
+    const registration = await navigator.serviceWorker.ready
+    return registration.active?.state === 'activated'
   })
 
   await page.reload()

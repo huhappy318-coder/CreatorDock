@@ -1,17 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createCoverClient } from './coverClient'
 import type { CoverProfile } from './coverConfig'
 
 const profile: CoverProfile = { id: 'cover-1', name: '测试', provider: 'custom', endpoint: 'https://images.example.test/generate', model: 'cover-model', enabled: true }
 
 describe('cover client', () => {
-  it('sends a compatible image request with optional references and parses a URL', async () => {
-    let init: RequestInit | undefined
-    const client = createCoverClient(profile, 'secret', async (_url, request) => { init = request; return new Response(JSON.stringify({ data: [{ url: 'https://cdn.example.test/cover.png' }] }), { status: 200 }) })
-    const result = await client.generate({ prompt: '暖色杂志封面', size: '1024x1280', referenceImages: ['data:image/png;base64,abc'] })
-    expect(result.imageUrl).toBe('https://cdn.example.test/cover.png')
-    expect(init?.headers).toMatchObject({ Authorization: 'Bearer secret' })
-    expect(JSON.parse(String(init?.body))).toMatchObject({ model: 'cover-model', size: '1024x1280', reference_images: ['data:image/png;base64,abc'] })
+  it('refuses to send reference images without a dedicated image-edit adapter', async () => {
+    const fetcher = vi.fn<typeof fetch>()
+    const client = createCoverClient(profile, 'secret', fetcher)
+
+    await expect(client.generate({ prompt: '暖色杂志封面', size: '1024x1280', referenceImages: ['data:image/png;base64,abc'] })).rejects.toMatchObject({ kind: 'unsupported' })
+    expect(fetcher).not.toHaveBeenCalled()
   })
 
   it('folds negative prompts into the standard prompt instead of inventing a provider field', async () => {
@@ -25,6 +24,20 @@ describe('cover client', () => {
 
     expect(body.prompt).toBe('暖色杂志封面\n\n避免出现：模糊文字、畸形手指')
     expect(body).not.toHaveProperty('negative_prompt')
+  })
+
+  it('blocks known provider-native profiles before sending an OpenAI Images request body', async () => {
+    const fetcher = vi.fn<typeof fetch>()
+    const legacyProfile: CoverProfile = {
+      ...profile,
+      provider: 'dashscope-image',
+      endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-to-image/image-synthesis',
+    }
+
+    const client = createCoverClient(legacyProfile, 'secret', fetcher)
+
+    await expect(client.generate({ prompt: '封面', size: '1024x1024' })).rejects.toMatchObject({ kind: 'unsupported' })
+    expect(fetcher).not.toHaveBeenCalled()
   })
 
   it('parses base64 output and redacts network errors', async () => {
