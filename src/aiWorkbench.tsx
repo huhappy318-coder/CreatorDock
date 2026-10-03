@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import {
   AI_CONFIG_STORAGE_KEY,
   addModelProfile,
@@ -31,6 +31,8 @@ import { CoverWorkbench } from './coverWorkbench'
 import { FloatingPanel } from './floatingPanel'
 import { type StyleSample } from './stylePrompt'
 import type { LanguageSetting } from './i18n'
+import type { LaunchEntry } from './config'
+import { buildPlatformTask, createContentPackage, loadContentPackages, saveContentPackages, type ContentPackageRecord } from './contentPackage'
 import { createWritingTurn, loadWritingDraft, loadWritingHistory, saveWritingDraft, saveWritingHistory, type WritingTurn } from './writingHistory'
 
 const defaultModelPreset = MODEL_PRESETS[0]
@@ -41,6 +43,13 @@ const MODEL_CONNECTION_STATUS_STORAGE_KEY = 'creatordock.ai.connection-status.v1
 
 type ModelConnectionStatus = 'succeeded' | 'failed'
 type ModelConnectionChecks = Record<string, { status: ModelConnectionStatus, checkedAt: string, latencyMs?: number }>
+
+export type AiWorkbenchProps = {
+  language?: LanguageSetting
+  entries?: readonly LaunchEntry[]
+  sourceContent?: { title: string; body: string; entryId: string }
+  onDistribute?: (record: ContentPackageRecord) => void
+}
 
 function loadModelConnectionChecks(storage: Storage): ModelConnectionChecks {
   try {
@@ -84,7 +93,7 @@ function modelPresetFromDiscovered(provider: ModelPreset['provider'], baseUrl: s
   }
 }
 
-export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting }) {
+export function AiWorkbench({ language = 'zh-CN', entries = [], sourceContent, onDistribute }: AiWorkbenchProps) {
   const [loaded, setLoaded] = useState(() => loadAiConfig(localStorage))
   const { config } = loaded
   const tr = (zh: string, en: string): string => language === 'en' ? en : zh
@@ -109,6 +118,12 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
   const [running, setRunning] = useState(false)
   const [activeDialog, setActiveDialog] = useState<'model' | 'style' | 'skill' | null>(null)
   const [workspace, setWorkspace] = useState<'writing' | 'cover'>('writing')
+  useEffect(() => { if (sourceContent) setWorkspace('writing') }, [sourceContent])
+  const [mode, setMode] = useState<'single' | 'package'>('package')
+  const contentTargets = useMemo(() => entries.map((entry) => ({ id: entry.id, label: entry.displayName, ...(entry.platformPresetId ? { platformPresetId: entry.platformPresetId } : {}) })), [entries])
+  const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>([])
+  const [contentPackages, setContentPackages] = useState<ContentPackageRecord[]>(() => loadContentPackages(localStorage))
+  const [packageRunning, setPackageRunning] = useState(false)
   const configFileInput = useRef<HTMLInputElement>(null)
   const sampleFileInput = useRef<HTMLInputElement>(null)
   const writingHistoryRef = useRef(writingHistory)
@@ -117,6 +132,23 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
   const selectedModel = useMemo(() => config.models.find((model) => model.id === selectedModelId) ?? config.models.find((model) => model.id === config.defaultModelId), [config.defaultModelId, config.models, selectedModelId])
   const selectedStyle = useMemo(() => config.styles.find((style) => style.id === selectedStyleId) ?? config.styles.find((style) => style.id === config.defaultStyleId), [config.defaultStyleId, config.styles, selectedStyleId])
   const selectedModelConnection = selectedModel ? modelConnectionChecks[selectedModel.id] : undefined
+  const selectedTargets = useMemo(() => contentTargets.filter((target) => selectedTargetIds.includes(target.id)), [contentTargets, selectedTargetIds])
+  const [selectedPackageId, setSelectedPackageId] = useState('')
+  const currentPackage = contentPackages.find((item) => item.id === selectedPackageId) ?? contentPackages.at(-1)
+  const generationController = useRef<AbortController | null>(null)
+  const contentPackagesRef = useRef(contentPackages)
+  useEffect(() => () => generationController.current?.abort(), [])
+  const generateLabel = mode === 'package' && contentTargets.length > 0 ? tr('生成内容包', 'Generate package') : tr('生成内容', 'Generate')
+
+  useEffect(() => {
+    setSelectedTargetIds((current) => {
+      const valid = current.filter((id) => contentTargets.some((target) => target.id === id))
+      if (contentTargets.length === 0) return current
+      if (valid.length > 0 && valid.length === current.length && valid.every((id, index) => id === current[index])) return current
+      if (valid.length > 0) return valid
+      return contentTargets.slice(0, 3).map((target) => target.id)
+    })
+  }, [contentTargets])
 
   const commit = (next: AiConfig) => {
     saveAiConfig(localStorage, next)
@@ -154,6 +186,27 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
     setTask(nextTask)
     try { saveWritingDraft(localStorage, nextTask) }
     catch (caught) { setError(caught instanceof Error ? caught.message : tr('写作草稿保存失败。', 'Writing draft could not be saved.')) }
+  }
+
+  const persistContentPackage = (nextPackage: ContentPackageRecord) => {
+    const current = contentPackagesRef.current
+    const next = (current.some((item) => item.id === nextPackage.id)
+      ? current.map((item) => item.id === nextPackage.id ? nextPackage : item)
+      : [...current, nextPackage]).slice(-20)
+    contentPackagesRef.current = next
+    setContentPackages(next)
+    try { saveContentPackages(localStorage, next) }
+    catch { setError(tr('本机存储已满或不可用。内容仍在当前页面，请立即导出保存。', 'Local storage is full or unavailable. Export your work before leaving this page.')) }
+  }
+
+  const exportContentPackage = (record: ContentPackageRecord) => {
+    const text = [`# ${tr('内容包', 'Content package')}`, record.brief, ...record.variants.flatMap((variant) => [
+      `## ${variant.target.label}`, `> ${variant.status}`, variant.output || variant.error || tr('尚无内容', 'No content yet'),
+    ])].join('\n\n')
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url; link.download = `CreatorDock-${record.id}.md`; link.click(); URL.revokeObjectURL(url)
+    setStatus(tr('内容包已导出为 Markdown。', 'Content package exported as Markdown.'))
   }
 
   const refreshModels = async () => {
@@ -288,7 +341,82 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
     } catch (caught) { setError(caught instanceof Error ? caught.message : tr('复制失败。', 'Copy failed.')) }
   }
 
+  const copyContentVariant = async (output: string) => {
+    clearMessage()
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error(tr('当前浏览器不支持复制，请手动选择文本。', 'This browser does not support copying. Select the text manually.'))
+      await navigator.clipboard.writeText(output)
+      setStatus(tr('这份平台稿已复制。', 'This platform draft was copied.'))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : tr('复制失败。', 'Copy failed.'))
+    }
+  }
+
+  const generateContentPackage = async (retryPackage?: ContentPackageRecord) => {
+    if (generationController.current) return
+    clearMessage()
+    const brief = retryPackage?.brief ?? task
+    const targets = retryPackage ? retryPackage.variants.filter((variant) => variant.status !== 'complete').map((variant) => variant.target) : selectedTargets
+    if (!brief.trim()) { setError(tr('请先写下选题或内容要求。', 'Enter an idea or content brief first.')); return }
+    if (targets.length === 0) { setError(tr('至少选择一个发布入口。', 'Select at least one publishing destination.')); return }
+    if (!selectedModel) { setError(tr('请先保存并选择一个模型。', 'Save and select a model first.')); return }
+    if (!passphrase) {
+      setError(tr('请先输入本机解锁口令，再开始生成内容包。', 'Enter the local unlock passphrase before generating a content package.'))
+      setActiveDialog('model')
+      return
+    }
+
+    const controller = new AbortController()
+    generationController.current = controller
+    setPackageRunning(true)
+    let currentPackage: ContentPackageRecord | undefined
+    try {
+      const key = await unlockModelApiKey(selectedModel, passphrase)
+      setUnlockedModelId(selectedModel.id)
+      const client = createLLMClient(selectedModel, key)
+      const skills = loadWritingSkills(localStorage).skills.filter((skill) => skill.enabled).map(({ name, content }) => ({ name, content }))
+      const requestBase = { style: selectedStyle, styleEnabled: true, humanization: config.humanization, skills }
+      controller.signal.throwIfAborted()
+      currentPackage = retryPackage ? { ...retryPackage, variants: retryPackage.variants.map((variant) => variant.status === 'complete' ? variant : { ...variant, status: 'generating', error: undefined }) } : createContentPackage(brief, targets)
+      setSelectedPackageId(currentPackage.id)
+      persistContentPackage(currentPackage)
+
+      for (const target of targets) {
+        try {
+          controller.signal.throwIfAborted()
+          const output = await client.generateText({ ...requestBase, task: buildPlatformTask(brief, target), signal: controller.signal })
+          controller.signal.throwIfAborted()
+          currentPackage = {
+            ...currentPackage,
+            updatedAt: new Date().toISOString(),
+            variants: currentPackage.variants.map((variant) => variant.target.id === target.id ? { ...variant, output, status: 'complete' } : variant),
+          }
+        } catch (caught) {
+          if (controller.signal.aborted) throw caught
+          const message = caught instanceof Error ? caught.message : tr('此平台生成失败。', 'This platform draft failed.')
+          currentPackage = {
+            ...currentPackage,
+            updatedAt: new Date().toISOString(),
+            variants: currentPackage.variants.map((variant) => variant.target.id === target.id ? { ...variant, status: 'error', error: message } : variant),
+          }
+        }
+        persistContentPackage(currentPackage)
+      }
+      const completed = currentPackage.variants.filter((variant) => variant.status === 'complete').length
+      const total = currentPackage.variants.length
+      setStatus(tr(`内容包已生成 ${completed}/${total} 份平台稿。`, `Content package generated ${completed}/${total} platform drafts.`))
+    } catch (caught) {
+      if (currentPackage) persistContentPackage({ ...currentPackage, variants: currentPackage.variants.map((variant) => variant.status === 'generating' ? { ...variant, status: 'interrupted' } : variant) })
+      if (controller.signal.aborted) setStatus(tr('已停止生成，已完成的稿件已保留。', 'Generation stopped. Completed drafts were kept.'))
+      else setError(caught instanceof Error ? caught.message : tr('内容包生成失败。', 'Content package generation failed.'))
+    } finally {
+      generationController.current = null
+      setPackageRunning(false)
+    }
+  }
+
   const generate = async () => {
+    if (generationController.current) return
     clearMessage()
     if (!task.trim()) { setError(tr('请输入写作任务。', 'Enter a writing task.')); return }
     if (!selectedModel) { setError(tr('请先保存并选择一个模型。', 'Save and select a model first.')); return }
@@ -297,6 +425,8 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
       setActiveDialog('model')
       return
     }
+    const controller = new AbortController()
+    generationController.current = controller
     const turn = createWritingTurn(task)
     updateWritingHistory((current) => [...current, turn])
     setRunning(true)
@@ -305,29 +435,34 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
       setUnlockedModelId(selectedModel.id)
       const client = createLLMClient(selectedModel, key)
       const skills = loadWritingSkills(localStorage).skills.filter((skill) => skill.enabled).map(({ name, content }) => ({ name, content }))
-      const request = { task, style: selectedStyle, styleEnabled: true, humanization: config.humanization, skills }
+      controller.signal.throwIfAborted()
+      const request = { signal: controller.signal, task, style: selectedStyle, styleEnabled: true, humanization: config.humanization, skills }
       if (selectedModel.streaming) {
         let text = ''
         lastStreamingHistoryPersistedAt.current = 0
         for await (const chunk of client.streamText(request)) {
+          controller.signal.throwIfAborted()
           text += chunk
           const now = Date.now()
           const persistPartial = text.length > 0 && now - lastStreamingHistoryPersistedAt.current >= 500
           updateWritingHistory((current) => current.map((item) => item.id === turn.id ? { ...item, output: text } : item), persistPartial)
           if (persistPartial) lastStreamingHistoryPersistedAt.current = now
         }
+        controller.signal.throwIfAborted()
         updateWritingHistory((current) => current.map((item) => item.id === turn.id ? { ...item, status: 'complete' } : item))
       } else {
         const text = await client.generateText(request)
+        controller.signal.throwIfAborted()
         updateWritingHistory((current) => current.map((item) => item.id === turn.id ? { ...item, output: text, status: 'complete' } : item))
       }
       setStatus(tr('生成完成。', 'Generation complete.'))
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : tr('生成失败。', 'Generation failed.')
-      updateWritingHistory((current) => current.map((item) => item.id === turn.id ? { ...item, status: 'error', error: message } : item))
-      setError(message)
+      const message = controller.signal.aborted ? tr('已停止生成，已有内容已保留。', 'Generation stopped. Existing text was kept.') : caught instanceof Error ? caught.message : tr('生成失败。', 'Generation failed.')
+      updateWritingHistory((current) => current.map((item) => item.id === turn.id ? { ...item, status: controller.signal.aborted ? 'interrupted' : 'error', error: message } : item))
+      if (controller.signal.aborted) setStatus(message)
+      else setError(message)
     }
-    finally { setRunning(false) }
+    finally { generationController.current = null; setRunning(false) }
   }
 
   const startEditModel = (id: string) => {
@@ -360,7 +495,7 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
   }
 
   return (
-    <section className="ai-workbench" aria-labelledby="ai-heading">
+    <section className="ai-workbench" id="writing" aria-labelledby="ai-heading">
       <div className="ai-heading"><h2 id="ai-heading">{workspace === 'writing' ? tr('AI 写作', 'AI writing') : tr('封面生成', 'Cover generator')}</h2><div className="ai-heading-actions">{workspace === 'cover' && <button type="button" onClick={() => setWorkspace('writing')}>{tr('回到写作', 'Back to writing')}</button>}{workspace === 'writing' && <button type="button" onClick={() => setActiveDialog('model')}>{tr('模型设置', 'Model settings')}</button>}</div></div>
       {workspace === 'cover' ? <CoverWorkbench language={language} /> : <>
       {!activeDialog && (status || error || loaded.recovered) && <p className={error ? 'ai-message error' : 'ai-message'} role={error ? 'alert' : 'status'}>{error || status || tr('AI 配置损坏，已恢复空配置。', 'AI configuration was damaged; an empty configuration was restored.')}</p>}
@@ -415,6 +550,25 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
       <div className="ai-grid ai-main-grid">
         <section className="ai-panel generation-panel" aria-label={tr('写作任务区', 'Writing task area')}>
           <p className="panel-help generation-helper">{tr('使用你自己的模型，帮你高效完成草稿撰写、改写和润色等任务。', 'Use your own model to draft, rewrite, and polish your content.')}</p>
+          {(!selectedModel || !selectedStyle) && <aside className="creator-setup-card" aria-label={tr('开始创作', 'Get started')}>
+            <div className="creator-setup-copy"><strong>{selectedModel ? tr('加入你的写作口吻（可选）', 'Add your writing voice (optional)') : tr('先完成两步，再开始稳定产出', 'Two quick steps before you publish')}</strong><p>{tr('把自己的模型和写作口吻存到本机，之后每个选题都能直接复用。', 'Save your own model and writing voice locally, then reuse them for every brief.')}</p></div>
+            <div className="creator-setup-actions">
+              {!selectedModel && <button type="button" onClick={() => setActiveDialog('model')}>{tr('设置模型', 'Configure model')}</button>}
+              {!selectedStyle && <button type="button" onClick={() => setActiveDialog('style')}>{tr('添加个人风格', 'Add personal style')}</button>}
+            </div>
+          </aside>}
+          <div className="content-mode-switch" aria-label={tr('写作方式', 'Writing mode')}>
+            <button type="button" aria-pressed={mode === 'package'} onClick={() => setMode('package')}>{tr('内容包', 'Content package')}</button>
+            <button type="button" aria-pressed={mode === 'single'} onClick={() => setMode('single')}>{tr('单篇写作', 'Single draft')}</button>
+          </div>
+          {mode === 'package' && <div className="content-target-picker" aria-label={tr('内容包目标', 'Content package targets')}>
+            <div className="content-target-heading"><strong>{tr('发布到哪些入口？', 'Where will you publish?')}</strong><span>{selectedTargets.length}/{contentTargets.length || 0}</span></div>
+            <div className="content-target-list">
+              {contentTargets.length === 0
+                ? <p className="content-target-empty">{tr('先在左侧添加至少一个平台入口。', 'Add at least one destination on the left first.')}</p>
+                : contentTargets.map((target) => <button key={target.id} type="button" className={selectedTargetIds.includes(target.id) ? 'selected' : ''} aria-pressed={selectedTargetIds.includes(target.id)} onClick={() => setSelectedTargetIds((current) => current.includes(target.id) ? current.filter((id) => id !== target.id) : [...current, target.id])}>{target.label}</button>)}
+            </div>
+          </div>}
           <aside className="writing-setup-notice" aria-label={tr('模型连接状态', 'Model connection status')}>
             <strong>{tr('模型状态', 'Model status')}</strong>
             {!selectedModel
@@ -428,6 +582,11 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
                   : <span>{tr('已保存，尚未验证连接。', 'Saved, connection unverified.')}</span>}
             <button type="button" onClick={() => setActiveDialog('model')}>{!selectedModel ? tr('去设置模型', 'Set up model') : !passphrase ? tr('输入口令并测试', 'Enter passphrase and test') : tr('测试连接', 'Test connection')}</button>
           </aside>
+          {sourceContent && <aside className="dock-source-content" aria-label="待适配内容"><strong>{sourceContent.title}</strong><p>{tr('点击带入会追加到当前草稿；生成前可继续编辑。', 'Append this content to your draft, then edit before generating.')}</p><button type="button" disabled={running || packageRunning} onClick={() => { updateWritingDraft([task.trim(), `请为目标平台适配以下内容，保留原意与事实。\n标题：${sourceContent.title}\n正文：${sourceContent.body}`].filter(Boolean).join('\n\n')); setMode('package'); setSelectedTargetIds([sourceContent.entryId]) }}>{tr('带入写作任务', 'Use this content')}</button></aside>}
+          <div className="writing-draft-heading"><strong>{tr('当前草稿', 'Current draft')}</strong><button type="button" onClick={startNewWritingConversation}>{tr('新对话', 'New conversation')}</button></div>
+          <label className="ai-field">{tr('写作任务', 'Writing task')}<textarea aria-label={tr('写作任务', 'Writing task')} aria-describedby="writing-draft-status" className="task-input" value={task} onChange={(event) => updateWritingDraft(event.target.value)} placeholder={tr('例如：把下面这段素材改成一篇自然口语的公众号开头……', 'e.g. Turn the material below into a natural, conversational newsletter opening…')} /></label><small id="writing-draft-status" className="writing-draft-status">{tr('草稿会自动保存在本机；新对话不会删除之前的写作记录。', 'Drafts save automatically on this device; new conversations do not delete earlier writing history.')}</small>
+          <button className="primary-action generate-button" type="button" onClick={() => void (mode === 'package' && contentTargets.length > 0 ? generateContentPackage() : generate())} disabled={running || packageRunning}>{running || packageRunning ? tr('生成中…', 'Generating…') : generateLabel}</button>
+          {(running || packageRunning) && <button type="button" className="stop-generation" onClick={() => generationController.current?.abort()}>{tr('停止生成', 'Stop generation')}</button>}
           {writingHistory.length > 0 && <div className="writing-history" aria-label={tr('写作对话记录', 'Writing conversation history')}>
             <div className="writing-history-heading"><strong>{tr('写作记录', 'Writing history')}</strong><span>{tr('已保留在本机', 'Saved on this device')}</span></div>
             {writingHistory.map((turn) => <article className="writing-turn" key={turn.id}>
@@ -435,9 +594,25 @@ export function AiWorkbench({ language = 'zh-CN' }: { language?: LanguageSetting
               <div className="writing-bubble assistant-bubble"><span>AI</span>{turn.status === 'generating' && !turn.output ? <p className="writing-pending">{tr('正在生成…', 'Generating…')}</p> : turn.status === 'interrupted' ? <><p className="writing-error">{tr('上次生成已中断；你可以继续这条或删除记录。', 'The previous generation was interrupted. Continue or delete this record.')}</p>{turn.output && <pre>{turn.output}</pre>}</> : turn.status === 'error' ? <><p className="writing-error">{turn.error}</p>{turn.output && <pre>{turn.output}</pre>}</> : <pre>{turn.output}</pre>}<div className="writing-turn-actions">{turn.output && <><button type="button" onClick={() => continueWritingTurn(turn)}>{tr('继续 / 改写', 'Continue / revise')}</button><button type="button" onClick={() => void copyWritingTurn(turn)}>{tr('复制', 'Copy')}</button></>}<button type="button" onClick={() => deleteWritingTurn(turn.id)}>{tr('删除', 'Delete')}</button></div></div>
             </article>)}
           </div>}
-          <div className="writing-draft-heading"><strong>{tr('当前草稿', 'Current draft')}</strong><button type="button" onClick={startNewWritingConversation}>{tr('新对话', 'New conversation')}</button></div>
-          <label className="ai-field">{tr('写作任务', 'Writing task')}<textarea aria-describedby="writing-draft-status" className="task-input" value={task} onChange={(event) => updateWritingDraft(event.target.value)} placeholder={tr('例如：把下面这段素材改成一篇自然口语的公众号开头……', 'e.g. Turn the material below into a natural, conversational newsletter opening…')} /></label><small id="writing-draft-status" className="writing-draft-status">{tr('草稿会自动保存在本机；新对话不会删除之前的写作记录。', 'Drafts save automatically on this device; new conversations do not delete earlier writing history.')}</small>
-          <button className="primary-action generate-button" type="button" onClick={() => void generate()} disabled={running}>{running ? tr('生成中…', 'Generating…') : tr('生成内容', 'Generate')}</button>
+          {mode === 'package' && currentPackage && <div className="content-package-results" aria-label={tr('最近内容包', 'Recent content package')}>
+            <div className="content-package-heading"><div><strong>{tr('最近内容包', 'Recent content package')}</strong><span>{currentPackage.brief}</span></div><small>{currentPackage.variants.filter((variant) => variant.status === 'complete').length}/{currentPackage.variants.length} {tr('份已完成', 'complete')}</small></div>
+            <div className="content-package-toolbar">
+              <label className="ai-field">{tr('历史内容包', 'Package history')}<select aria-label={tr('历史内容包', 'Package history')} value={currentPackage.id} disabled={packageRunning} onChange={(event) => setSelectedPackageId(event.target.value)}>{[...contentPackages].reverse().map((record) => <option key={record.id} value={record.id}>{new Date(record.createdAt).toLocaleDateString(language)} · {record.brief.slice(0, 48)}</option>)}</select></label>
+              {onDistribute && <button type="button" disabled={packageRunning || !currentPackage.variants.some(variant => variant.status === 'complete' && variant.output.trim())} onClick={() => onDistribute(currentPackage)}>{tr('加入分发队列', 'Add to distribution queue')}</button>}
+              <button type="button" onClick={() => exportContentPackage(currentPackage)}>{tr('导出内容包', 'Export package')}</button>
+              {currentPackage.variants.some((variant) => variant.status === 'error' || variant.status === 'interrupted') && <button type="button" disabled={running || packageRunning} onClick={() => void generateContentPackage(currentPackage)}>{tr('重试未完成稿件', 'Retry unfinished drafts')}</button>}
+              <button type="button" onClick={() => updateWritingDraft(currentPackage.brief)}>{tr('复用选题', 'Reuse brief')}</button>
+            </div>
+            <div className="content-package-variants">
+              {currentPackage.variants.map((variant) => <article className={`content-package-variant ${variant.status}`} key={variant.id}>
+                <div className="content-package-variant-heading"><strong>{variant.target.label}</strong><span>{variant.status === 'complete' ? tr('已完成', 'Complete') : variant.status === 'error' ? tr('生成失败', 'Failed') : variant.status === 'interrupted' ? tr('已中断', 'Interrupted') : tr('生成中', 'Generating')}</span></div>
+                {variant.status === 'error' && <p className="content-package-error">{variant.error}</p>}
+                {variant.status === 'interrupted' && <p className="content-package-pending">{tr('上次生成已中断，可重试未完成稿件。', 'Generation was interrupted. Retry unfinished drafts.')}</p>}
+                {(variant.output || variant.status === 'complete') ? <textarea className="content-variant-editor" aria-label={tr(`编辑 ${variant.target.label} 稿件`, `Edit ${variant.target.label} draft`)} value={variant.output} disabled={packageRunning} onChange={(event) => persistContentPackage({ ...currentPackage, updatedAt: new Date().toISOString(), variants: currentPackage.variants.map((item) => item.id === variant.id ? { ...item, output: event.target.value } : item) })} /> : variant.status === 'generating' && <p className="content-package-pending">{tr('正在等待模型返回…', 'Waiting for the model…')}</p>}
+                {variant.output && <button type="button" onClick={() => void copyContentVariant(variant.output)}>{tr('复制本篇', 'Copy draft')}</button>}
+              </article>)}
+            </div>
+          </div>}
           <div className="ai-feature-actions"><button type="button" onClick={() => setActiveDialog('style')}>{tr('写作风格与去 AI 味', 'Writing style and humanization')}</button><button type="button" onClick={() => setActiveDialog('skill')}>{tr('写作 Skill', 'Writing Skill')}</button><button type="button" onClick={() => setWorkspace('cover')}>{tr('封面生成', 'Cover generation')}</button></div>
         </section>
       </div>

@@ -47,3 +47,12 @@ describe('cover client', () => {
     await expect(failing.generate({ prompt: '封面', size: '1024x1024' })).rejects.toThrow('[redacted] network failure')
   })
 })
+
+it('uses GPT Image output_format rather than the unsupported response_format field', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: [{ b64_json: 'abc' }] })))
+  const client = createCoverClient({ ...profile, provider: 'openai-images', model: 'gpt-image-1' }, 'key', fetcher)
+  await client.generate({ prompt: '封面', size: '1024x1536' })
+  const payload = JSON.parse(String(fetcher.mock.calls[0][1]?.body))
+  expect(payload).not.toHaveProperty('response_format')
+  expect(payload.output_format).toBe('png')
+})

@@ -35,7 +35,7 @@ import {
 } from './config'
 import { platformLabel, translate } from './i18n'
 import './styles.css'
-import { AiWorkbench } from './aiWorkbench'
+import { DistributionWorkbench } from './distributionWorkbench'
 import { browserWindowName, openBrowserEntryInNewWindow, openBrowserEntryWindow, rememberBrowserWindow } from './browserWindows'
 import {
   createDesktopAlias,
@@ -345,13 +345,17 @@ export function App() {
     return <div className="desktop-loading" role="status">{t('preparing')}</div>
   }
 
-  return (
+  const management = (settings: boolean) => (
     <div className={`app-shell theme-${config.theme} density-${config.density}`} lang={config.language}>
       <header className="mobile-header">
         <a className="brand" href="#workbench" aria-label={t('brandHome')}><span>CD</span> CreatorDock</a>
         <button ref={mobileAddButton} type="button" onClick={(event) => openAdd(event.currentTarget)}>{t('addDestination')}</button>
       </header>
 
+      <nav className="mobile-workspace-nav" aria-label={config.language === 'en' ? 'Workspace navigation' : '工作区导航'}>
+        <a href="#workbench">{config.language === 'en' ? 'Destinations' : '平台入口'}</a>
+        <a href="#writing">{config.language === 'en' ? 'Writing' : '开始创作'}</a>
+      </nav>
       <main className="workbench" id="workbench">
         {feedback && (
           <div className={`feedback ${feedback.kind}`} role={feedback.kind === 'error' ? 'alert' : 'status'}>
@@ -388,7 +392,7 @@ export function App() {
           </label>
         </div>
 
-        <details className="settings-panel compact-settings">
+        <details className="settings-panel compact-settings" open={settings || undefined}>
           <summary>{t('preferences')}</summary>
           <div className="settings-grid">
             <label>{t('theme')}<select aria-label={t('theme')} value={config.theme} onChange={(event) => commitConfig({ ...config, theme: event.target.value as ThemeSetting })}><option value="light">{t('light')}</option><option value="dark">{t('dark')}</option><option value="system">{t('system')}</option></select></label>
@@ -472,7 +476,7 @@ export function App() {
           )}
         </section>
       </main>
-      <aside className="ai-column"><AiWorkbench language={config.language} /></aside>
+
       {shouldOfferMacDesktopAlias(desktopPlatform, desktopAlias, macDesktopAliasOnboardingHandled) && (
         <section className="mac-alias-onboarding" role="status" aria-label={t('macDesktopAliasTitle')}>
           <strong>{t('macDesktopAliasTitle')}</strong>
@@ -534,6 +538,7 @@ export function App() {
       )}
     </div>
   )
+  return <DistributionWorkbench config={config} management={management} onOpen={handleDestinationOpen} />
 }
 
 function DestinationCard({

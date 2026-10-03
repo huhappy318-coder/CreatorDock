@@ -2,9 +2,9 @@
 
 ![CreatorDock 主界面](docs/images/creatordock-overview.png)
 
-> 中文优先的创作者工作台：集中管理平台入口，在右侧完成 AI 写作与封面生成；账号名称、密钥和配置只保存在本机。
+> 中文优先的多平台分发工作台：准备内容、管理平台入口、逐平台记录发布进度；AI 写作与封面生成为辅助功能，数据保存在本机。
 
-[快速安装与使用](REMIND.md) · [查看可用桌面安装包（GitHub Releases）](https://github.com/huhappy318-coder/CreatorDock/releases)
+[中文图文使用说明](docs/USER_GUIDE.zh-CN.md) · [快速开始](REMIND.md) · [下载运行包与历史安装包（GitHub Releases）](https://github.com/huhappy318-coder/CreatorDock/releases)
 
 > 提示：只有 Releases 页面实际出现附件时，才表示对应系统的安装包已经发布；没有附件时可按下方“从源码运行”使用项目。
 
@@ -17,9 +17,15 @@ hold the accounts themselves.
 
 ## 中文
 
+### 2026-10 分发工作台
+
+[中文图文使用说明](docs/USER_GUIDE.zh-CN.md) · [交付说明与验证记录](docs/DELIVERY-2026-10-03.md)。预构建交付包可直接双击 `启动CreatorDock.command`（macOS，Python 3.9+），或运行 `python3 scripts/serve-built.py` 打开；无需先安装前端依赖。
+
+分发队列支持新建内容、平台独立文案、封面下载、发布进度、归档恢复与备份合并。原有 AI 内容包继续支持历史、失败重试和停止生成，并可加入分发队列。换设备前请导出备份。
+
 ### 产品定位与预览
 
-CreatorDock 是一个静态、可安装的创作者工作台：把多个平台、多个账号的入口集中在同一处，同时让同平台账号保持独立。浏览器/PWA 卡片始终以隔离的外部链接打开；Windows 桌面版会对已保存 Chrome、Edge 与 Profile 的入口请求独立浏览器窗口，系统浏览器和 macOS 仍交由系统外开。
+CreatorDock 是一个静态、可安装的创作者工作台：把多个平台、多个账号的入口集中在同一处，并分别管理文案和发布记录。浏览器/PWA 入口以外部链接打开；账号标签不会隔离同一浏览器的站点登录状态；Windows 桌面版会对已保存 Chrome、Edge 与 Profile 的入口请求独立浏览器窗口，系统浏览器和 macOS 仍交由系统外开。
 
 本地预览：
 
@@ -28,11 +34,11 @@ npm ci
 npm run dev
 ```
 
-打开 Vite 输出的本地地址。桌面版首次启动按当前显示器工作区的 50% 居中显示，宽高限制在 820–1000 × 560–720；不会自动最大化。标题栏保留系统最大化能力，应用内可切换“左侧悬浮 / 恢复普通窗口”并恢复默认小窗。正式交接截图建议展示左右两栏工作台，并至少包含：
+打开 Vite 输出的本地地址。桌面版首次启动按当前显示器工作区的 50% 居中显示，宽高限制在 820–1000 × 560–720；不会自动最大化。标题栏保留系统最大化能力，应用内可切换“左侧悬浮 / 恢复普通窗口”并恢复默认小窗。正式交接截图建议展示分发工作台，并至少包含：
 
-- 首页左右两栏和入口搜索；
-- 同一平台的两个不同账号卡片；
-- 搜索或紧凑密度状态；
+- 首页三栏：导航、内容队列和当前分发；
+- 平台账号选择与独立发布进度；
+- 内容搜索或手机布局；
 - “添加入口”对话框。
 
 截图可放在 `docs/images/`，文件名建议为 `creatordock-overview.png`；提交前检查截图中没有私人账号名、浏览器资料、Cookie、Token 或其他敏感信息。
@@ -120,7 +126,7 @@ npm run test:icons
 
 ### 多模型写作与个人风格
 
-首页右侧的“AI 写作”只保留写作任务框和三个独立入口：“写作风格与去 AI 味”“写作 Skill”“封面生成”。顶部“模型设置”弹窗只管理模型、Base URL、模型 ID、API Key、连接测试和配置导入导出，不再混入风格与 Skill。首次添加模型时，按“选择模型 → 填写 API Key → 保存并返回”完成即可；保存不会等待远程接口，之后可单独点击“测试当前连接”。已预填的接口参数收在“高级参数”中。你可以添加多个 OpenAI 兼容、DeepSeek、通义千问、智谱 GLM、Kimi、MiniMax、豆包/火山方舟、百川、腾讯混元、硅基流动、Gemini 或 Anthropic 模型；模型元数据保存在本机，API Key 使用你设置的本机解锁口令通过 PBKDF2 + AES-GCM 加密。口令只存在当前页面内存中，不会保存、上传或写入导出文件。
+进入左侧“AI 辅助适配”后，“AI 写作”保留写作任务框和三个独立入口：“写作风格与去 AI 味”“写作 Skill”“封面生成”。顶部“模型设置”弹窗只管理模型、Base URL、模型 ID、API Key、连接测试和配置导入导出，不再混入风格与 Skill。首次添加模型时，按“选择模型 → 填写 API Key → 保存并返回”完成即可；保存不会等待远程接口，之后可单独点击“测试当前连接”。已预填的接口参数收在“高级参数”中。你可以添加多个 OpenAI 兼容、DeepSeek、通义千问、智谱 GLM、Kimi、MiniMax、豆包/火山方舟、百川、腾讯混元、硅基流动、Gemini 或 Anthropic 模型；模型元数据保存在本机，API Key 使用你设置的本机解锁口令通过 PBKDF2 + AES-GCM 加密。口令只存在当前页面内存中，不会保存、上传或写入导出文件。
 
 每次生成会按固定顺序组合任务、当前风格描述、`.txt/.md` 样本、可编辑的去 AI 味规则和任务要求。样本仅作风格参考，不会被当作指令。可以创建多个风格、随时切换或临时关闭风格规则，并维护禁用词与必须习惯。写作草稿和历史记录保存在本机；“新对话”只开启新的草稿，不会清除已有记录。
 
@@ -129,6 +135,12 @@ npm run test:icons
 模型下拉目录同时提供“自定义型号”。内置型号只是无 Key 时的起始参考；要获取服务商当天实际可用的最新型号，请在“模型设置”填入对应 API Key 后点击“从平台刷新型号”。OpenAI 兼容、DeepSeek 和 Anthropic 使用服务商的 `/models` 列表，Gemini 使用官方 `models.list`；请求从本机直接发往你填写的接口，不经过 CreatorDock。若服务商关闭浏览器跨域或不提供列表接口，可直接选择“自定义型号”输入模型 ID。
 
 模型设置、写作风格、Skill 和封面接口都会以可移动、可调整大小的浮窗打开：拖动标题栏移动，拖动右下角调整尺寸；右侧 AI 写作与封面工作区仍保留在主界面。
+
+### 内容包：一个选题，多平台草稿
+
+“AI 辅助适配”中的 AI 写作默认进入“内容包”模式。先从已有入口中选择要发布的平台，再在写作任务里输入一个选题、素材或改写要求；CreatorDock 会为每个选中的入口分别生成一份可继续编辑的草稿，并把结果保存在本机。平台入口、目标选择和单篇写作模式可以随时切换，单篇写作仍适合只处理一个版本的任务。
+
+内容包不会自动发布，也不会把 API Key 或登录信息写入内容包记录。生成失败的平台会单独显示错误，其余平台的结果仍会保留，方便逐份复制、修改和发布。
 
 ### Skill 建议与封面生成
 
@@ -351,6 +363,15 @@ stylistic references rather than instructions. Style presets can be switched or
 temporarily disabled, with forbidden words and required habits editable in the
 same panel. AI exports contain model metadata and a `hasApiKey` flag only;
 imported profiles require the key to be entered again.
+
+### Content packages: one idea, multiple drafts
+
+The AI writing area starts in “Content package” mode. Select destinations from
+the launch entries on the left, enter one brief or source, and CreatorDock
+generates a separate editable draft for each selected destination. Targets and
+single-draft mode can be switched at any time. Nothing is published
+automatically, and package records never contain API keys or login data; if one
+destination fails, successful variants remain available for review and copy.
 
 ### Skill suggestions and cover generation
 

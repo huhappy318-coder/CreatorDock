@@ -40,13 +40,21 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
+// Platform operations now live behind the approved platform-management navigation.
+function renderManager() {
+  const result = render(<App />)
+  fireEvent.click(screen.getByRole('button', { name: /^(平台管理|Platform management)$/ }))
+  return result
+}
+
+
 describe('catalog discovery', () => {
   it('keeps duplicate-platform accounts distinct and searches by platform name', () => {
     seed(config([
       entry({ id: 'work', displayName: 'Work account', platformPresetId: 'wechat-official-accounts', destinationUrl: 'https://mp.weixin.qq.com/' }),
       entry({ id: 'personal', displayName: 'Personal account', platformPresetId: 'wechat-official-accounts', destinationUrl: 'https://mp.weixin.qq.com/' }),
     ]))
-    render(<App />)
+    renderManager()
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search destinations' }), {
       target: { value: 'WeChat Official Accounts' },
@@ -61,7 +69,7 @@ describe('catalog discovery', () => {
       entry({ id: 'video', displayName: 'Video room' }),
       entry({ id: 'writing', displayName: 'Writing desk', destinationUrl: 'https://example.com/writing' }),
     ]))
-    render(<App />)
+    renderManager()
 
     expect(screen.queryByRole('navigation', { name: 'Categories' })).not.toBeInTheDocument()
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search destinations' }), { target: { value: 'Writing desk' } })
@@ -78,7 +86,7 @@ describe('catalog discovery', () => {
         platformPresetId: unverified.id,
       }),
     ]))
-    render(<App />)
+    renderManager()
 
     const link = screen.getByRole('link', { name: /Publishing account/ })
     expect(link).toHaveAttribute('target', '_blank')
@@ -90,7 +98,7 @@ describe('catalog discovery', () => {
   it('opens each destination in a stable named browser window and records it locally', () => {
     seed(config([entry({ id: 'wechat-one', displayName: '公众号·账号一' })]))
     const open = vi.spyOn(window, 'open').mockImplementation(() => ({ focus: vi.fn() } as unknown as Window))
-    render(<App />)
+    renderManager()
 
     fireEvent.click(screen.getByRole('link', { name: /公众号·账号一/ }))
 
@@ -102,7 +110,7 @@ describe('catalog discovery', () => {
   it('offers a deliberate new window without replacing the account-window record', () => {
     seed(config([entry({ id: 'new-window-entry', displayName: 'New window account' })]))
     const open = vi.spyOn(window, 'open').mockImplementation(() => ({ focus: vi.fn() } as unknown as Window))
-    render(<App />)
+    renderManager()
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions for New window account' }))
     fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Open in new window' }))
@@ -115,7 +123,7 @@ describe('catalog discovery', () => {
   it('keeps the native new-tab fallback when an explicit new window is blocked', () => {
     seed(config([entry({ id: 'blocked-new-window', displayName: 'Blocked new window account' })]))
     vi.spyOn(window, 'open').mockImplementation(() => null)
-    render(<App />)
+    renderManager()
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions for Blocked new window account' }))
     const openedNormally = fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Open in new window' }))
@@ -127,7 +135,7 @@ describe('catalog discovery', () => {
   it('falls back to the normal new-tab link when a browser blocks the separate window', () => {
     seed(config([entry({ id: 'fallback-entry', displayName: 'Fallback account' })]))
     vi.spyOn(window, 'open').mockImplementation(() => null)
-    render(<App />)
+    renderManager()
 
     const openedNormally = fireEvent.click(screen.getByRole('link', { name: /Fallback account/ }))
 
@@ -143,7 +151,7 @@ describe('destination lifecycle', () => {
       profileDirectoryName: 'Profile 2',
       createShortcut: true,
     })]))
-    render(<App />)
+    renderManager()
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions for Studio account' }))
     fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Copy destination' }))
@@ -163,7 +171,7 @@ describe('destination lifecycle', () => {
 
   it('searches platform aliases and keeps category and profile fields out of the simple form', () => {
     seed(config([]))
-    render(<App />)
+    renderManager()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Add destination' })[0])
     const dialog = screen.getByRole('dialog', { name: 'Add destination' })
@@ -183,7 +191,7 @@ describe('destination lifecycle', () => {
 
   it('preserves a hidden legacy browser profile while editing ordinary fields', () => {
     seed(config([entry({ browserTarget: 'chrome', profileDirectoryName: 'Profile 2', createShortcut: true })]))
-    render(<App />)
+    renderManager()
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Studio account' }))
     const dialog = screen.getByRole('dialog', { name: 'Edit destination' })
@@ -198,7 +206,7 @@ describe('destination lifecycle', () => {
 
   it('adds, edits, and confirms deletion without confusing shortcut settings with web links', async () => {
     seed(config([]))
-    render(<App />)
+    renderManager()
 
     const addButton = screen.getAllByRole('button', { name: 'Add destination' })[0]
     fireEvent.click(addButton)
@@ -247,7 +255,7 @@ describe('destination lifecycle', () => {
 
   it('reports domain validation errors and restores focus when the dialog closes', () => {
     seed(config([]))
-    render(<App />)
+    renderManager()
 
     const addButton = screen.getAllByRole('button', { name: 'Add destination' })[0]
     fireEvent.click(addButton)
@@ -277,7 +285,7 @@ describe('destination lifecycle', () => {
       entry({ id: 'b', displayName: 'B account', destinationUrl: 'https://example.com/b' }),
       entry({ id: 'c', displayName: 'C account', destinationUrl: 'https://example.com/c' }),
     ]))
-    render(<App />)
+    renderManager()
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete B account' }))
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete destination' }))
@@ -293,7 +301,7 @@ describe('reordering', () => {
       entry({ id: 'b', displayName: 'B account', destinationUrl: 'https://example.com/b' }),
       entry({ id: 'c', displayName: 'C account', destinationUrl: 'https://example.com/c' }),
     ]))
-    render(<App />)
+    renderManager()
 
     fireEvent.click(screen.getByRole('button', { name: 'Move B account earlier' }))
     expect(screen.getAllByRole('link', { name: /account/ }).map((link) => link.textContent)).toEqual([
@@ -328,7 +336,7 @@ describe('reordering', () => {
       entry({ id: 'c', displayName: 'C work', destinationUrl: 'https://example.com/c' }),
       entry({ id: 'hidden-after', displayName: 'Hidden after', destinationUrl: 'https://example.com/after' }),
     ]))
-    render(<App />)
+    renderManager()
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search destinations' }), { target: { value: 'work' } })
     expect(screen.getByRole('button', { name: 'Move A work earlier' })).toBeDisabled()
@@ -347,26 +355,26 @@ describe('reordering', () => {
 
 describe('preferences, backup, and recovery', () => {
   it('defaults to Chinese and switches the workbench to English', () => {
-    render(<App />)
+    renderManager()
 
-    expect(screen.getByRole('heading', { name: '创作者工作台' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '平台管理' })).toBeInTheDocument()
     expect(document.documentElement.lang).toBe('zh-CN')
     fireEvent.change(screen.getByLabelText('界面语言'), { target: { value: 'en' } })
-    expect(screen.getByRole('heading', { name: 'Creator workspace' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Platform management' })).toBeInTheDocument()
     expect(document.documentElement.lang).toBe('en')
     expect(JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY)!)).toMatchObject({ language: 'en' })
     fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'zh-CN' } })
-    expect(screen.getByRole('heading', { name: '创作者工作台' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '平台管理' })).toBeInTheDocument()
   })
 
   it('persists theme and density choices on the workbench root', () => {
     seed(config([entry()]))
-    const { container } = render(<App />)
+    const { container } = renderManager()
 
     fireEvent.change(screen.getByLabelText('Theme'), { target: { value: 'dark' } })
     fireEvent.change(screen.getByLabelText('Density'), { target: { value: 'compact' } })
 
-    expect(container.firstChild).toHaveClass('theme-dark', 'density-compact')
+    expect(container.firstChild).toHaveClass('theme-dark', 'dock-compact')
     expect(JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY)!)).toMatchObject({
       theme: 'dark',
       density: 'compact',
@@ -377,7 +385,7 @@ describe('preferences, backup, and recovery', () => {
     const current = config([entry({ displayName: 'Current account' })])
     const imported = config([entry({ id: 'imported', displayName: 'Imported account', destinationUrl: 'https://imported.example' })])
     seed(current)
-    render(<App />)
+    renderManager()
 
     const input = screen.getByLabelText('Import configuration')
     fireEvent.change(input, {
@@ -416,7 +424,7 @@ describe('preferences, backup, and recovery', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
       downloads.push(this.download)
     })
-    render(<App />)
+    renderManager()
 
     fireEvent.click(screen.getByRole('button', { name: 'Export configuration' }))
     fireEvent.click(screen.getByRole('button', { name: 'Export shortcut file' }))
@@ -461,7 +469,7 @@ describe('preferences, backup, and recovery', () => {
 
   it('announces corrupt-storage recovery and distinguishes no search results', async () => {
     localStorage.setItem(CONFIG_STORAGE_KEY, '{bad json')
-    render(<App />)
+    renderManager()
 
     expect(screen.getByRole('status')).toHaveTextContent('已保存的数据损坏，已恢复默认配置。')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'nothing-can-match-this' } })

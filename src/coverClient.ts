@@ -28,7 +28,7 @@ export function createCoverClient(profile: CoverProfile, apiKey: string, fetcher
       }
       const negativePrompt = request.negativePrompt?.trim()
       const prompt = negativePrompt ? `${request.prompt.trim()}\n\n避免出现：${negativePrompt}` : request.prompt.trim()
-      const payload: Record<string, unknown> = { model: profile.model, prompt, size: request.size, n: 1, response_format: 'b64_json' }
+      const payload: Record<string, unknown> = { model: profile.model, prompt, size: request.size, n: 1, ...(profile.model.startsWith('gpt-image-') ? { output_format: 'png' } : { response_format: 'b64_json' }) }
       if (request.referenceImages?.length) {
         throw new CoverError('unsupported', 'Reference images require a dedicated image-edit adapter before they can be sent to any provider.')
       }

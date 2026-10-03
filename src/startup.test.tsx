@@ -14,5 +14,5 @@ beforeEach(() => {
 it('renders the application when the optional PWA registration chunk rejects', async () => {
   await import('./main')
 
-  expect(await screen.findByRole('heading', { name: '创作者工作台' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: '分发工作台' })).toBeInTheDocument()
 })

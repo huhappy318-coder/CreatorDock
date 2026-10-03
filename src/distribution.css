@@ -1,0 +1,124 @@
+.distribution-shell { --accent:#cf633f; --accent-soft:#fbede6; --border:#e7e7e4; --ink:#292b2b; --muted:#92948f; --panel:#fff; --surface:#fafaf8; color:var(--ink); background:var(--surface); display:grid; grid-template-columns:216px minmax(0,1fr); min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; line-height:1.5; }
+.distribution-shell.theme-dark { --accent:#ec956f; --accent-soft:#3f2c25; --border:#363836; --ink:#eeeeea; --muted:#a4a8a1; --panel:#232623; --surface:#1c1f1c; color-scheme:dark; }
+@media(prefers-color-scheme:dark){.distribution-shell.theme-system { --accent:#ec956f; --accent-soft:#3f2c25; --border:#363836; --ink:#eeeeea; --muted:#a4a8a1; --panel:#232623; --surface:#1c1f1c; color-scheme:dark; }}
+.distribution-shell [hidden] { display:none !important; }
+.distribution-shell h1,.distribution-shell h2,.distribution-shell h3 { font-family:inherit; color:var(--ink); font-weight:600; letter-spacing:-.03em; }
+.distribution-shell button,.distribution-shell input,.distribution-shell textarea,.distribution-shell select { font:inherit; }
+.distribution-shell button { border:1px solid var(--border); background:var(--panel); border-radius:8px; padding:9px 13px; color:var(--ink); transition:background .15s,border-color .15s; }
+.distribution-shell button:hover { border-color:var(--accent); }
+.distribution-shell button:disabled { opacity:.45; cursor:not-allowed; }
+.distribution-shell a { color:inherit; text-decoration:none; }
+.distribution-shell input:not([type=checkbox]):not([type=file]),.distribution-shell textarea,.distribution-shell select { width:100%; border:1px solid var(--border); border-radius:8px; padding:10px 12px; background:var(--panel); color:var(--ink); min-width:0; }
+.distribution-shell textarea { resize:vertical; line-height:1.8; }
+.distribution-shell input::placeholder,.distribution-shell textarea::placeholder { color:var(--muted); }
+.distribution-shell :focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.distribution-shell button.dock-primary { background:var(--accent); color:white; border-color:var(--accent); font-weight:500; padding:11px 18px; white-space:nowrap; }
+.dock-sidebar { position:sticky; top:0; height:100vh; background:color-mix(in srgb,var(--surface) 92%,#aaa); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:30px 18px 24px; }
+.dock-brand { display:flex; gap:10px; align-items:center; font-size:18px; font-weight:650; letter-spacing:-.5px; margin:0 5px 44px; }
+.dock-brand>span { background:var(--ink); color:var(--surface); width:33px; height:33px; border-radius:9px; display:grid; place-items:center; font-size:12px; letter-spacing:-1px; }
+.dock-sidebar nav,.dock-sidebar-bottom { display:grid; gap:8px; }
+.dock-sidebar button { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:transparent; border:0; padding:12px 14px; border-radius:7px; color:color-mix(in srgb,var(--ink) 75%,var(--muted)); }
+.dock-sidebar button[aria-current=page] { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+.dock-sidebar button:hover { background:var(--accent-soft); }
+.dock-sidebar-bottom { margin-top:auto; }
+.dock-sidebar-bottom small { color:var(--muted); font-size:11px; margin:18px 14px 0; display:flex; align-items:center; gap:7px; }
+.dock-local-dot { width:5px; height:5px; border-radius:50%; background:#8f9e8e; }
+.dock-main { min-width:0; position:relative; }
+.dock-header { padding:38px 36px 27px; display:flex; align-items:center; justify-content:space-between; gap:20px; border-bottom:1px solid var(--border); }
+.dock-header h1 { font-size:26px; line-height:1.25; margin:0 0 9px; }
+.dock-header p { margin:0; color:var(--muted); font-size:13px; }
+.dock-workspace { display:grid; grid-template-columns:minmax(360px,1fr) 340px; min-height:calc(100vh - 133px); }
+.dock-queue { min-width:0; display:flex; flex-direction:column; padding:28px 30px 16px; }
+.dock-section-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:17px; }
+.dock-section-heading h2 { font-size:14px; margin:0; }
+.dock-section-heading button,.dock-queue-footer button { border:0; background:none; padding:0; color:var(--muted); font-size:12px; }
+.dock-shortcut-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:34px; }
+.dock-shortcut-grid>a { display:flex; align-items:center; gap:10px; padding:13px 12px; background:var(--panel); border:1px solid var(--border); border-radius:9px; min-width:0; }
+.dock-shortcut-grid>a:hover { border-color:var(--accent); }
+.dock-platform-icon { width:31px; height:31px; border-radius:8px; object-fit:contain; flex-shrink:0; }
+.dock-shortcut-grid strong { font-size:12px; font-weight:550; }
+.dock-shortcut-grid>a>span:not(.dock-arrow) { display:flex; flex-direction:column; min-width:0; }
+.dock-shortcut-grid small { color:var(--muted); font-size:10px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.dock-arrow { margin-left:auto; color:var(--muted); font-size:14px; }
+.dock-queue-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid var(--border); padding-bottom:12px; }
+.dock-tabs { display:flex; gap:15px; align-self:stretch; }
+.dock-tabs button { border:0; background:transparent; border-radius:0; padding:8px 0; font-size:12px; color:var(--muted); position:relative; white-space:nowrap; }
+.dock-tabs button[aria-selected=true],.dock-tabs button[aria-pressed=true] { color:var(--ink); font-weight:600; }
+.dock-tabs button[aria-selected=true]:after,.dock-tabs button[aria-pressed=true]:after { position:absolute; content:""; height:2px; background:var(--accent); bottom:-13px; left:0; right:0; }
+.dock-tabs span { margin-left:5px; font-size:10px; color:var(--muted); font-weight:400; }
+.distribution-shell .dock-queue-toolbar input { font-size:12px; max-width:140px; padding:7px 10px; }
+.dock-records { padding-top:14px; display:grid; gap:8px; }
+.distribution-shell .dock-record { width:100%; min-width:0; display:flex; align-items:center; gap:14px; text-align:left; border:1px solid transparent; border-radius:9px; padding:20px 16px; background:transparent; position:relative; }
+.distribution-shell .dock-record.is-selected { background:var(--accent-soft); border-color:color-mix(in srgb,var(--accent) 15%,transparent); }
+.dock-record.is-selected:before { content:""; position:absolute; left:-1px; top:18px; bottom:18px; width:3px; background:var(--accent); border-radius:3px; }
+.dock-thumbnail { width:64px; height:72px; border-radius:6px; background:color-mix(in srgb,var(--border) 70%,var(--panel)); display:grid; place-items:center; flex-shrink:0; color:var(--muted); overflow:hidden; }
+.dock-thumbnail img { width:100%; height:100%; object-fit:cover; }
+.dock-record-content { display:grid; gap:6px; min-width:0; flex:1; }
+.dock-record-content>strong { font-size:14px; font-weight:600; overflow-wrap:anywhere; }
+.dock-record-content>small { font-size:11px; color:var(--muted); }
+.dock-badges { display:flex; flex-wrap:wrap; gap:5px; }
+.dock-badges>span { font-size:10px; border:1px solid var(--border); border-radius:4px; padding:2px 5px; background:var(--panel); color:var(--muted); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dock-badges>span.is-done { color:#4c8464; }
+.dock-record-arrow { color:var(--muted); }
+.dock-empty { text-align:center; padding:76px 8px 100px; max-width:470px; margin:auto; }
+.dock-empty-icon { display:grid; place-items:center; color:var(--accent); background:var(--accent-soft); width:60px; height:60px; border-radius:16px; margin:0 auto 24px; }
+.dock-empty-icon svg { width:28px; height:28px; }
+.dock-empty h2 { font-size:18px; margin:0 0 12px; }
+.dock-empty p { color:var(--muted); font-size:12px; margin:0 0 25px; line-height:1.9; }
+.dock-queue-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:24px; color:var(--muted); font-size:10px; }
+.dock-detail { padding:27px 25px 22px; background:var(--panel); border-left:1px solid var(--border); min-width:0; }
+.dock-detail-eyebrow { display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px; }
+.dock-detail-eyebrow button { background:transparent; border:0; color:var(--muted); padding:0; font-size:11px; }
+.dock-detail h2 { font-size:20px; line-height:1.6; margin:18px 0; overflow-wrap:anywhere; }
+.dock-progress-label { font-size:11px; color:var(--muted); margin:0 0 7px; }
+.dock-detail progress { display:block; width:100%; height:4px; appearance:none; border:0; background:var(--border); border-radius:9px; overflow:hidden; accent-color:var(--accent); }
+.dock-detail progress::-webkit-progress-bar { background:var(--border); }
+.dock-detail progress::-webkit-progress-value { background:var(--accent); }
+.dock-detail progress::-moz-progress-bar { background:var(--accent); }
+.dock-target-list { display:grid; gap:5px; margin:22px 0; }
+.dock-target-list button { display:flex; align-items:center; gap:10px; padding:11px 8px; border-color:transparent; background:transparent; text-align:left; }
+.dock-target-list button.is-selected { background:var(--surface); border-color:var(--border); }
+.dock-target-list button>span { display:grid; gap:2px; flex:1; min-width:0; }
+.dock-target-list strong { font-weight:500; font-size:12px; overflow-wrap:anywhere; }
+.dock-target-list small { color:var(--muted); font-size:10px; overflow-wrap:anywhere; }
+.dock-target-list em { font-style:normal; font-size:10px; color:var(--accent); white-space:nowrap; }
+.dock-target-list em.is-done { color:#4c8464; }
+.dock-preparation { border-top:1px solid var(--border); padding-top:20px; }
+.dock-preparation h3 { font-size:13px; margin:0 0 16px; }
+.dock-preparation ul { list-style:none; padding:0; margin:0 0 20px; display:grid; gap:9px; font-size:12px; color:var(--muted); }
+.dock-preparation li span { color:#6d967a; margin-right:9px; }
+.dock-copy-actions { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.dock-copy-actions button,.dock-copy-actions a { border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:11px; }
+.dock-open-platform { display:flex; align-items:center; justify-content:space-between; background:var(--ink); color:var(--panel)!important; padding:11px 14px; border-radius:7px; font-size:12px; }
+.dock-help { color:var(--muted); font-size:10px; text-align:center; margin:10px 0 21px; }
+.dock-url-label { display:block; font-size:11px; margin-bottom:12px; }
+.dock-url-label>span { color:var(--muted); margin-left:5px; }
+.distribution-shell .dock-url-label input { margin-top:6px; padding:9px; font-size:11px; }
+.dock-mark-published { width:100%; font-size:12px!important; }
+.distribution-shell .dock-ai-link { display:flex; gap:8px; align-items:center; width:100%; border:0; background:transparent; color:var(--accent); padding:18px 0 10px; font-size:12px; }
+.dock-ai-link>span { margin-left:auto; }
+.dock-detail-bottom { border-top:1px solid var(--border); display:flex; justify-content:space-between; margin-top:13px; padding-top:15px; }
+.dock-detail-bottom button { font-size:10px; border:0; background:transparent; color:var(--muted); padding:0; }
+.dock-detail-placeholder { padding:82px 12px; color:var(--muted); }
+.dock-detail-placeholder>svg { color:var(--accent); width:26px; height:26px; }
+.dock-detail-placeholder h2 { font-size:17px; margin:20px 0 12px; }
+.dock-detail-placeholder p { font-size:12px; line-height:1.9; }
+.dock-detail-placeholder>div { display:grid; gap:19px; margin-top:36px; font-size:11px; }
+.dock-published { padding:12px; border:1px solid var(--border); border-radius:7px; font-size:11px; }
+.dock-published strong { color:#4c8464; }.dock-published p { color:var(--muted); }.dock-published a { display:block; margin:10px 0; color:var(--accent); }.dock-published button { font-size:10px; padding:4px 8px; }
+.dock-notice,.dock-recovery { margin:16px 30px 0; padding:12px 14px; border:1px solid var(--border); border-radius:7px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; font-size:12px; background:var(--panel); }
+.dock-notice button { font-size:11px; padding:3px 8px; }.dock-error,.dock-error-text { color:#b6462d; }.dock-undo { position:fixed; z-index:25; bottom:24px; left:50%; transform:translateX(-50%); box-shadow:0 6px 25px #0002; border:1px solid var(--border); background:var(--panel); border-radius:8px; padding:10px 16px; font-size:12px; display:flex; align-items:center; gap:12px; white-space:nowrap; }
+.dock-manager { padding:26px 32px; }.dock-manager .app-shell { display:block; min-height:0; background:transparent; --panel:var(--surface); }.dock-manager .workbench { padding:0; border:0; min-height:0; background:transparent; }.dock-manager .mobile-header,.dock-manager .mobile-workspace-nav,.dock-manager .brand-stack,.dock-manager .compact-hero { display:none; }.dock-manager .compact-header { justify-content:flex-end; }.dock-manager .platform-grid { grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); }.dock-manager .destination-card { background:var(--panel); border-color:var(--border); }.dock-manager-settings .workbench-toolbar,.dock-manager-settings .catalog,.dock-manager-settings .header-actions>.primary-action { display:none; }.dock-manager-settings .compact-settings { margin-top:20px; }.dock-manager h2 { font-size:18px; }.dock-manager .card-actions { flex-wrap:wrap; }.dock-data-settings { margin:0 32px 40px; border-top:1px solid var(--border); padding-top:20px; }.dock-data-settings h2 { font-size:17px; }.dock-data-settings p { color:var(--muted); font-size:12px; }.dock-file-button { display:inline-block; padding:9px 13px; border:1px solid var(--border); background:var(--panel); border-radius:8px; margin-left:10px; cursor:pointer; }.dock-file-button input { display:none; }
+.dock-assistant { max-width:1060px; margin:auto; padding:24px 32px; }.dock-assistant .ai-column { border:0; }.dock-assistant .ai-workbench { border:0; background:var(--panel); }
+.dock-modal-backdrop { position:fixed; inset:0; z-index:100; background:#17191655; backdrop-filter:blur(3px); }.distribution-shell .dock-editor { background:var(--panel); color:var(--ink); border:1px solid var(--border); border-radius:14px; box-shadow:0 20px 80px #0003; max-width:calc(100vw - 32px); }.dock-editor .floating-panel-heading { border-bottom:1px solid var(--border); padding:20px 24px; background:var(--panel); }.dock-editor .floating-panel-heading h3 { font-size:20px; }.dock-editor .eyebrow { color:var(--muted); font-size:10px; }.dock-editor-form { display:grid; gap:20px; padding:5px; }.dock-editor-form>label,.dock-adapt-editor label { display:grid; gap:8px; font-size:12px; }.dock-editor-form fieldset { border:0; padding:0; margin:0; min-width:0; }.dock-editor-form legend { font-size:12px; padding:0; margin-bottom:12px; }.dock-account-picker { display:grid; grid-template-columns:1fr 1fr; gap:8px; }.dock-account-picker label { display:flex; align-items:center; gap:8px; border:1px solid var(--border); padding:9px; border-radius:7px; font-size:11px; overflow-wrap:anywhere; }.dock-account-picker label:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); }.dock-account-picker input { accent-color:var(--accent); }.dock-account-picker img { width:24px; height:24px; }.dock-account-picker small { font-size:9px; color:var(--muted); }.dock-cover-upload>span { color:var(--muted); font-size:10px; }.dock-cover-preview { display:flex; align-items:center; gap:16px; }.dock-cover-preview img { height:70px; width:100px; object-fit:cover; border-radius:6px; }.dock-editor-actions { display:flex; gap:8px; justify-content:flex-end; padding-top:16px; border-top:1px solid var(--border); }.dock-adapt-editor { border:1px solid var(--border); padding:12px; border-radius:8px; }.dock-adapt-editor summary { font-size:12px; }.dock-adapt-editor label { margin-top:15px; }.dock-adapt-editor p { font-size:11px; color:var(--muted); }.dock-detail-back { display:none; }
+.dock-compact .dock-record { padding-top:12px; padding-bottom:12px; }.dock-compact .dock-thumbnail { height:52px; width:48px; }
+@media(min-width:1550px){.distribution-shell { grid-template-columns:230px minmax(0,1fr); }.dock-workspace { grid-template-columns:minmax(0,1fr) 370px; }.dock-shortcut-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }.dock-queue { padding:30px 38px 20px; }.dock-detail { padding:30px; }.dock-header { padding-left:38px; padding-right:38px; }}
+@media(max-width:1150px){.distribution-shell { grid-template-columns:180px minmax(0,1fr); }.dock-sidebar { padding:26px 12px; }.dock-brand { font-size:16px; gap:7px; }.dock-sidebar button { padding:11px 9px; gap:8px; font-size:13px; }.dock-workspace { grid-template-columns:minmax(300px,1fr) 290px; }.dock-queue { padding:24px 20px 16px; }.dock-detail { padding:24px 18px; }.dock-header { padding:30px 24px 24px; }.dock-queue-toolbar { flex-wrap:wrap; }.distribution-shell .dock-queue-toolbar input { max-width:none; margin-top:10px; }.dock-tabs { width:100%; gap:22px; }.dock-tabs button[aria-selected=true]:after,.dock-tabs button[aria-pressed=true]:after { bottom:-3px; }}
+@media(max-width:900px){.distribution-shell { grid-template-columns:72px minmax(0,1fr); }.dock-sidebar { padding:26px 12px; }.dock-brand { font-size:0; margin:0 auto 36px; }.dock-brand>span { font-size:12px; }.dock-sidebar button { justify-content:center; padding:13px; }.dock-sidebar-bottom small { display:none; }.dock-sidebar button>span { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }.dock-header h1 { font-size:23px; }.dock-header p { font-size:12px; }.dock-workspace { grid-template-columns:minmax(260px,1fr) 280px; }.dock-shortcut-grid { grid-template-columns:1fr 1fr; }.dock-shortcut-grid>a { padding:9px; }.dock-shortcut-grid strong { font-size:10px; }.dock-shortcut-grid small,.dock-shortcut-grid .dock-arrow { display:none; }.dock-shortcut-grid .dock-platform-icon { width:25px; height:25px; }.dock-record { gap:10px!important; padding:15px 11px!important; }.dock-thumbnail { width:46px; height:58px; }.dock-record-content>strong { font-size:12px; }}
+@media(max-width:700px){.distribution-shell { display:block; padding-bottom:66px; }.dock-sidebar { position:fixed; top:auto; bottom:0; left:0; right:0; height:62px; z-index:40; padding:5px 8px; border-right:0; border-top:1px solid var(--border); background:var(--panel); display:flex; flex-direction:row; gap:0; }.dock-brand { display:none; }.dock-sidebar nav { display:flex; flex:3; gap:0; }.dock-sidebar-bottom { display:flex; flex:2; margin:0; gap:0; }.dock-sidebar button { display:flex; flex-direction:column; justify-content:center; gap:3px; padding:5px 1px; font-size:10px; border-radius:6px; height:50px; }.dock-sidebar button>span { position:static; clip-path:none; width:auto; height:auto; overflow:visible; white-space:nowrap; font-size:9px; }.dock-sidebar svg { width:18px; height:18px; }.dock-header { padding:27px 20px 23px; gap:12px; }.dock-header h1 { font-size:22px; }.dock-header p { font-size:10px; max-width:190px; }.distribution-shell .dock-header>.dock-primary { padding:10px 12px; font-size:11px; }.dock-workspace { display:block; min-height:calc(100dvh - 193px); }.dock-queue { min-height:calc(100dvh - 193px); padding:23px 20px 18px; }.dock-shortcut-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:28px; }.dock-shortcut-grid>a { padding:12px; }.dock-shortcut-grid strong { font-size:12px; }.dock-shortcut-grid small { display:block; font-size:10px; }.dock-shortcut-grid .dock-platform-icon { width:30px; height:30px; }.dock-detail { display:none; }.dock-detail.is-open { display:block; position:fixed; z-index:45; inset:0 0 62px; overflow:auto; padding:20px 25px 35px; border:0; }.dock-detail-back { display:block; background:transparent!important; border:0!important; padding:0 0 24px!important; font-size:12px!important; color:var(--muted)!important; }.dock-detail h2 { font-size:23px; }.dock-record-content>strong { font-size:14px; }.dock-thumbnail { width:54px; height:65px; }.dock-empty { padding:48px 0 70px; }.dock-manager { padding:20px; }.dock-manager .platform-grid { grid-template-columns:1fr; }.dock-manager .workbench { max-height:none; }.dock-manager .compact-header { display:flex; }.dock-assistant { padding:15px; }.dock-data-settings { margin:0 20px 30px; }.dock-data-settings button,.dock-file-button { font-size:12px; }.dock-notice,.dock-recovery { margin:12px 20px 0; }.dock-undo { max-width:calc(100vw - 24px); bottom:75px; font-size:11px; gap:7px; }.dock-account-picker { grid-template-columns:1fr; }.dock-editor .floating-panel-content { padding:16px; }.dock-editor .floating-panel-heading { padding:15px 20px; }}
+@media(prefers-reduced-motion:reduce){.distribution-shell * { transition:none!important; scroll-behavior:auto; }}
+.dock-source-content { padding:14px 16px; border:1px solid var(--border); border-radius:8px; background:var(--accent-soft); margin-bottom:16px; font-size:12px; }.dock-source-content p { color:var(--muted); font-size:11px; }.dock-source-content button { font-size:12px; }
+.dock-manager .app-shell { --accent:inherit; --accent-soft:inherit; --border:inherit; --ink:inherit; --muted:inherit; --panel:inherit; --surface:inherit; }
+/* Keep update controls above the mobile navigation and distribution detail. */
+.update-prompt { z-index:90; }
+@media(max-width:700px){.update-prompt { bottom:78px; }}

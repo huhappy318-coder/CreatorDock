@@ -19,6 +19,6 @@ test('loads the CreatorDock app shell from its service worker while offline', as
 
   expect(response).not.toBeNull()
   expect(response?.fromServiceWorker()).toBe(true)
-  await expect(page.locator('#workbench')).toBeVisible()
-  await expect(page.locator('.app-shell')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '分发工作台' })).toBeVisible()
+  await expect(page.locator('.distribution-shell')).toBeVisible()
 })

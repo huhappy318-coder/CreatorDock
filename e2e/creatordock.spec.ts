@@ -50,6 +50,7 @@ async function addWeChatAccount(page: Page, label: string) {
 }
 
 async function openPreferences(page: Page) {
+  if (!await page.locator('details.compact-settings').isVisible()) await page.getByRole('button', { name: /^(平台管理|Platform management)$/ }).click()
   await page.locator('details.compact-settings > summary').click()
 }
 
@@ -57,8 +58,9 @@ test('loads under the configured base path and serves its manifest and local ass
   const response = await page.goto('')
   expect(response?.status()).toBe(200)
   expect(new URL(page.url()).pathname).toBe(basePath)
-  await expect(page.getByRole('heading', { name: '创作者工作台' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'AI 写作', level: 2 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '分发工作台' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'AI 写作', level: 2 })).toHaveCount(0)
+  await page.getByRole('button', { name: '平台管理', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'AI 写作助手', level: 2 })).toHaveCount(0)
   await expect(page.getByRole('link', { name: /公众号·账号一/ })).toBeVisible()
   await expect(page.getByRole('link', { name: /公众号·账号二/ })).toBeVisible()
@@ -138,6 +140,7 @@ test('loads under the configured base path and serves its manifest and local ass
 test('keeps AI configuration off the home surface until settings is opened', async ({ page }) => {
   await page.goto('')
   await expect(page.getByRole('heading', { name: /模型与连接|Models and connection/ })).toHaveCount(0)
+  await page.getByRole('button', { name: 'AI 辅助适配', exact: true }).click()
   await page.getByRole('button', { name: /模型设置|Model settings/ }).click()
   const dialog = page.getByRole('dialog', { name: /模型与连接|Models and connection/ })
   await expect(dialog).toBeVisible()
@@ -147,12 +150,15 @@ test('keeps AI configuration off the home surface until settings is opened', asy
   await expect(dialog).toHaveCount(0)
 })
 
-test('keeps the workbench and writing area side by side at the desktop small-window size', async ({ page }) => {
+test('keeps the queue and distribution detail side by side at the desktop small-window size', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 620 })
   await page.goto('')
 
-  const columns = await page.locator('.app-shell').evaluate((element) => getComputedStyle(element).gridTemplateColumns)
+  const columns = await page.locator('.dock-workspace').evaluate((element) => getComputedStyle(element).gridTemplateColumns)
   expect(columns.split(' ')).toHaveLength(2)
+  await expect(page.getByRole('complementary', { name: '当前分发' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.getByRole('button', { name: 'AI 辅助适配', exact: true }).click()
   await expect(page.getByRole('button', { name: '写作风格与去 AI 味' })).toBeVisible()
   await expect(page.getByRole('button', { name: '写作 Skill' })).toBeVisible()
   await expect(page.getByRole('button', { name: '封面生成' })).toBeVisible()
@@ -160,6 +166,7 @@ test('keeps the workbench and writing area side by side at the desktop small-win
 
 test('opens the optional cover workspace without putting provider settings on the home surface', async ({ page }) => {
   await page.goto('')
+  await page.getByRole('button', { name: 'AI 辅助适配', exact: true }).click()
   await page.getByRole('button', { name: '封面生成' }).click()
   await expect(page.getByRole('heading', { name: '封面生成', level: 2 })).toBeVisible()
   await expect(page.getByRole('button', { name: '模型设置' })).toHaveCount(0)
@@ -174,6 +181,7 @@ test('opens the optional cover workspace without putting provider settings on th
 
 test('keeps duplicate accounts for one platform after a browser reload', async ({ page }) => {
   await page.goto('')
+  await page.getByRole('button', { name: '平台管理', exact: true }).click()
   await addWeChatAccount(page, '公众号账号一')
   await addWeChatAccount(page, '公众号账号二')
 
@@ -193,6 +201,7 @@ test('searches and reorders visible destinations with the keyboard', async ({ pa
   ]))
   await page.goto('')
 
+  await page.getByRole('button', { name: 'Platform management', exact: true }).click()
   await page.getByRole('searchbox', { name: 'Search destinations' }).fill('WeChat Official Accounts')
   await expect(page.getByRole('link', { name: /Video room/ })).toHaveCount(0)
   const moveEarlier = page.getByRole('button', { name: 'Move Beta account earlier' })
@@ -207,6 +216,7 @@ test('retains the current configuration after an invalid import', async ({ page 
   await seed(page, current)
   await page.goto('')
 
+  await page.getByRole('button', { name: 'Platform management', exact: true }).click()
   await page.getByLabel('Import configuration').setInputFiles({
     name: 'invalid.json',
     mimeType: 'application/json',

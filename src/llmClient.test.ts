@@ -59,3 +59,36 @@ describe('unified LLM client', () => {
     await expect(client.generateText(request)).rejects.toMatchObject({ kind: 'network', message: expect.not.stringContaining('sk-secret') })
   })
 })
+
+describe('provider response edge cases', () => {
+  const profile = { id: 'm', name: 'Test', provider: 'openai-compatible' as const, baseUrl: 'https://api.example.test/v1', model: 'test', streaming: true, imageGeneration: false, enabled: true }
+
+  it('retains the last streaming event when the connection ends without a newline', async () => {
+    const client = createLLMClient(profile, 'test', async () => new Response('data: {"choices":[{"delta":{"content":"最后一句"}}]}'))
+    let output = ''
+    for await (const chunk of client.streamText(request)) output += chunk
+    expect(output).toBe('最后一句')
+  })
+
+  it('rejects provider error events instead of reporting an empty success', async () => {
+    const client = createLLMClient(profile, 'test', async () => new Response('data: {"error":{"message":"quota exceeded"}}\n\n'))
+    await expect((async () => { for await (const _ of client.streamText(request)) { /* Consume response. */ } })()).rejects.toThrow()
+  })
+
+  it('rejects a successful HTTP response with no generated text', async () => {
+    const client = createLLMClient(profile, 'test', async () => new Response('{"choices":[]}'))
+    await expect(client.generateText(request)).rejects.toThrow()
+  })
+})
+
+it('forwards cancellation to the active HTTP request', async () => {
+  const controller = new AbortController()
+  const fetcher = vi.fn<typeof fetch>().mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(new DOMException('Stopped', 'AbortError')), { once: true })
+  }))
+  const client = createLLMClient({ id: 'm', name: 'Test', provider: 'openai-compatible', baseUrl: 'https://example.test/v1', model: 'test', streaming: false, imageGeneration: false, enabled: true }, 'key', fetcher)
+  const response = client.generateText({ ...request, signal: controller.signal })
+  controller.abort()
+  await expect(response).rejects.toThrow('Stopped')
+  expect(fetcher.mock.calls[0][1]?.signal?.aborted).toBe(true)
+})

@@ -11,6 +11,13 @@ vi.mock('./llmClient', () => ({
 }))
 
 import { AiWorkbench } from './aiWorkbench'
+import { addModelProfile, createDefaultAiConfig, MODEL_PRESETS, modelInputFromPreset, saveAiConfig } from './aiConfig'
+import type { LaunchEntry } from './config'
+
+const packageEntries: LaunchEntry[] = [
+  { id: 'xhs', displayName: '小红书', destinationUrl: 'https://creator.xiaohongshu.com/', browserTarget: 'default', createShortcut: false, platformPresetId: 'xiaohongshu' },
+  { id: 'wechat', displayName: '微信公众号', destinationUrl: 'https://mp.weixin.qq.com/', browserTarget: 'default', createShortcut: false, platformPresetId: 'wechat-official-accounts' },
+]
 
 describe('AI writing workbench', () => {
   beforeEach(() => { cleanup(); localStorage.clear() })
@@ -66,6 +73,49 @@ describe('AI writing workbench', () => {
     expect(screen.queryByLabelText('风格名称')).not.toBeInTheDocument()
   })
 
+  it('derives content package targets from the existing workbench entries', () => {
+    render(<AiWorkbench entries={packageEntries} />)
+
+    expect(screen.getByRole('button', { name: '单篇写作' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '内容包' })).toBeInTheDocument()
+    expect(screen.getByLabelText('内容包目标')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '小红书' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '微信公众号' })).toBeInTheDocument()
+  })
+
+  it('generates and renders one local variant for every selected target', async () => {
+    const input = { ...modelInputFromPreset(MODEL_PRESETS[0], 'sk-package'), streaming: false }
+    const config = await addModelProfile(createDefaultAiConfig(), input, 'local-passphrase')
+    saveAiConfig(localStorage, config)
+
+    render(<AiWorkbench entries={packageEntries} />)
+    fireEvent.click(screen.getByRole('button', { name: '模型设置' }))
+    fireEvent.change(screen.getByLabelText('本机解锁口令'), { target: { value: 'local-passphrase' } })
+    fireEvent.click(screen.getByRole('button', { name: '关闭模型设置' }))
+    fireEvent.change(screen.getByLabelText('写作任务'), { target: { value: '写一篇关于独立创作者工作流的分享' } })
+    fireEvent.click(screen.getByRole('button', { name: '生成内容包' }))
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('内容包已生成 2/2 份平台稿'))
+    expect(screen.getByLabelText('最近内容包')).toBeInTheDocument()
+    expect(screen.getAllByText('OK')).toHaveLength(2)
+    expect(localStorage.getItem('creatordock.content-packages.v1')).toContain('小红书')
+    expect(localStorage.getItem('creatordock.content-packages.v1')).toContain('微信公众号')
+  })
+
+  it('shows direct first-use setup actions when model or style is missing', () => {
+    render(<AiWorkbench />)
+
+    expect(screen.getByLabelText('开始创作')).toHaveTextContent('先完成两步')
+    expect(screen.getByRole('button', { name: '设置模型' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '添加个人风格' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '设置模型' }))
+    expect(screen.getByRole('dialog', { name: '模型与连接' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '关闭模型设置' }))
+    fireEvent.click(screen.getByRole('button', { name: '添加个人风格' }))
+    expect(screen.getByRole('dialog', { name: '写作风格与去 AI 味' })).toBeInTheDocument()
+  })
+
   it('keeps cover generation as a separate compact workspace', () => {
     render(<AiWorkbench />)
     fireEvent.click(screen.getByRole('button', { name: '封面生成' }))
@@ -89,4 +139,30 @@ describe('AI writing workbench', () => {
     expect(screen.getByLabelText('Model connection status')).toHaveTextContent('Unconfigured')
     expect(screen.getByRole('button', { name: 'Set up model' })).toBeInTheDocument()
   })
+})
+
+it('recovers older packages, edits drafts durably and reports storage failure without crashing', async () => {
+  const { createContentPackage, saveContentPackages } = await import('./contentPackage')
+  const old = createContentPackage('旧选题', [{ id: 'xhs', label: '小红书' }])
+  old.variants[0] = { ...old.variants[0], status: 'complete', output: '旧成稿' }
+  const recent = createContentPackage('新选题', [{ id: 'wechat', label: '公众号' }])
+  localStorage.clear()
+  saveContentPackages(localStorage, [old, recent])
+  cleanup()
+  const { unmount } = render(<AiWorkbench entries={packageEntries} />)
+  expect(screen.getByText('上次生成已中断，可重试未完成稿件。')).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('历史内容包'), { target: { value: old.id } })
+  fireEvent.change(screen.getByLabelText('编辑 小红书 稿件'), { target: { value: '修改后的成稿' } })
+  expect(localStorage.getItem('creatordock.content-packages.v1')).toContain('修改后的成稿')
+  unmount()
+  render(<AiWorkbench entries={packageEntries} />)
+  fireEvent.change(screen.getByLabelText('历史内容包'), { target: { value: old.id } })
+  expect(screen.getByLabelText('编辑 小红书 稿件')).toHaveValue('修改后的成稿')
+  const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError') })
+  try {
+    fireEvent.change(screen.getByLabelText('编辑 小红书 稿件'), { target: { value: '仍可导出的内容' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('本机存储已满或不可用')
+    expect(screen.getByLabelText('编辑 小红书 稿件')).toHaveValue('仍可导出的内容')
+    expect(screen.getByRole('button', { name: '导出内容包' })).toBeEnabled()
+  } finally { write.mockRestore(); cleanup() }
 })
